@@ -1231,7 +1231,7 @@ from werkzeug.security import generate_password_hash # تأكد من وجود ه
 with app.app_context():
     db.create_all()
     
-    with app.app_context():
+with app.app_context():
     db.create_all()
     
     # استدعاء البيانات من "خزنة" Render

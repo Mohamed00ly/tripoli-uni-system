@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}التسجيل محجوب — بوابة جامعة طرابلس{% endblock %}
+
+{% block content %}
+<div class="min-h-[65vh] flex items-center justify-center">
+  <div class="text-center max-w-sm">
+    <div class="w-24 h-24 bg-red-900/20 border border-red-800 rounded-full flex items-center justify-center mx-auto mb-6 text-5xl">
+      &#128274;
+    </div>
+    <h1 class="text-2xl font-bold text-white mb-3">صفحة التسجيل محجوبة</h1>
+    <p class="text-gray-400 text-sm mb-2">لا يمكنك الوصول إلى هذه الصفحة حالياً.</p>
+    <p class="text-red-400 font-medium mb-6">السبب: الرسوم الجامعية غير مدفوعة</p>
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 text-sm text-gray-300 text-right leading-relaxed">
+      يرجى مراجعة إدارة الشؤون المالية في الجامعة لتسوية المستحقات،
+      ثم التواصل مع مكتب القبول لتحديث حالتك المالية في النظام.
+    </div>
+    <a href="{{ url_for('dashboard') }}" class="inline-block mt-6 text-blue-400 hover:text-blue-300 transition text-sm">
+      &#8592; العودة للوحة الرئيسية
+    </a>
+  </div>
+</div>
+{% endblock %}

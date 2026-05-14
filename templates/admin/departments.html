@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% block title %}الأقسام الأكاديمية — لوحة الإدارة{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+  <h1 class="text-3xl font-bold text-white">الأقسام الأكاديمية</h1>
+  <p class="text-gray-400 mt-1 text-sm">{{ departments | length }} قسم</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+  <!-- Add form -->
+  <div>
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6 mb-5" id="add-form">
+      <h2 class="text-lg font-bold text-white mb-5">إضافة قسم جديد</h2>
+      <form method="POST" class="space-y-4">
+        <input type="hidden" name="action" value="add">
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">الاسم بالعربية <span class="text-red-400">*</span></label>
+          <input type="text" name="name_ar" required placeholder="تقنية المعلومات"
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500
+                   focus:outline-none focus:border-blue-500 transition">
+        </div>
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">الاسم بالإنجليزية <span class="text-red-400">*</span></label>
+          <input type="text" name="name_en" required placeholder="Information Technology"
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500
+                   focus:outline-none focus:border-blue-500 transition">
+        </div>
+        <button type="submit"
+          class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 rounded-xl transition">
+          إضافة القسم
+        </button>
+      </form>
+    </div>
+
+    <!-- Edit form (shown via JS) -->
+    <div class="bg-gray-900 rounded-2xl border border-yellow-800/50 p-6 hidden" id="edit-form">
+      <h2 class="text-lg font-bold text-white mb-5">تعديل القسم</h2>
+      <form method="POST" class="space-y-4">
+        <input type="hidden" name="action" value="edit">
+        <input type="hidden" name="dept_id" id="edit-dept-id">
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">الاسم بالعربية</label>
+          <input type="text" name="name_ar" id="edit-name-ar" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white
+                   focus:outline-none focus:border-yellow-500 transition">
+        </div>
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">الاسم بالإنجليزية</label>
+          <input type="text" name="name_en" id="edit-name-en" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white
+                   focus:outline-none focus:border-yellow-500 transition">
+        </div>
+        <div class="flex gap-3">
+          <button type="submit"
+            class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-3 rounded-xl transition">
+            حفظ التعديل
+          </button>
+          <button type="button" onclick="cancelEdit()"
+            class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl transition text-sm">
+            إلغاء
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Departments list -->
+  <div class="lg:col-span-2">
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-800">
+        <h2 class="text-lg font-bold text-white">الأقسام</h2>
+      </div>
+
+      {% if departments %}
+      <div class="divide-y divide-gray-800">
+        {% for d in departments %}
+        <div class="px-6 py-4 flex items-center justify-between hover:bg-gray-800/40 transition">
+          <div>
+            <p class="text-white font-medium">{{ d.name_ar }}</p>
+            <p class="text-gray-500 text-sm">{{ d.name_en }}</p>
+            <div class="flex items-center gap-3 mt-1 text-xs text-gray-600">
+              <span>{{ d.courses.count() }} مادة</span>
+              <span>{{ d.students | length }} طالب</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="startEdit({{ d.id }}, '{{ d.name_ar | e }}', '{{ d.name_en | e }}')"
+              class="bg-yellow-900/50 hover:bg-yellow-900/80 text-yellow-400 text-xs px-3 py-1.5 rounded-lg transition">
+              تعديل
+            </button>
+            <form method="POST" class="inline"
+                  onsubmit="return confirm('هل أنت متأكد من حذف قسم {{ d.name_ar }}؟')">
+              <input type="hidden" name="action"  value="delete">
+              <input type="hidden" name="dept_id" value="{{ d.id }}">
+              <button class="bg-red-900/50 hover:bg-red-900/80 text-red-400 text-xs px-3 py-1.5 rounded-lg transition">
+                حذف
+              </button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="p-16 text-center text-gray-600 text-sm">لا توجد أقسام بعد</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<script>
+function startEdit(id, nameAr, nameEn) {
+  document.getElementById('edit-dept-id').value  = id;
+  document.getElementById('edit-name-ar').value  = nameAr;
+  document.getElementById('edit-name-en').value  = nameEn;
+  document.getElementById('add-form').classList.add('hidden');
+  document.getElementById('edit-form').classList.remove('hidden');
+  document.getElementById('edit-form').scrollIntoView({ behavior: 'smooth' });
+}
+function cancelEdit() {
+  document.getElementById('add-form').classList.remove('hidden');
+  document.getElementById('edit-form').classList.add('hidden');
+}
+</script>
+{% endblock %}

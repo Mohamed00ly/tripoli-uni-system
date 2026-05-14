@@ -1,0 +1,223 @@
+{% extends 'base.html' %}
+{% block title %}إدارة الموظفين — لوحة الإدارة{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+  <a href="{{ url_for('admin_dashboard') }}" class="text-gray-500 hover:text-gray-300 text-sm transition">← لوحة الإدارة</a>
+  <h1 class="text-3xl font-bold text-white mt-4">إدارة الموظفين</h1>
+  <p class="text-gray-400 mt-1 text-sm">إنشاء وتعديل وحذف حسابات المديرين وصلاحياتهم</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+  <!-- Add / Edit form -->
+  <div id="form-card">
+    <div class="bg-gray-900 rounded-2xl border border-purple-800/50 p-6">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-10 h-10 bg-purple-900/50 rounded-xl flex items-center justify-center text-purple-400 text-xl">&#128100;</div>
+        <h2 class="text-lg font-bold text-white" id="form-title">إضافة مدير جديد</h2>
+      </div>
+
+      <form method="POST" class="space-y-4" id="staff-form">
+        <input type="hidden" name="action"   id="form-action"   value="add">
+        <input type="hidden" name="admin_id" id="form-admin-id" value="">
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">الاسم الكامل <span class="text-red-400">*</span></label>
+          <input type="text" name="full_name" id="form-full-name" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500
+                   focus:outline-none focus:border-purple-500 transition"
+            placeholder="اسم المدير">
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">الرقم الوظيفي <span class="text-red-400">*</span></label>
+          <input type="text" name="employee_id" id="form-employee-id" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500
+                   focus:outline-none focus:border-purple-500 transition"
+            placeholder="ADMIN002">
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">البريد الإلكتروني <span class="text-red-400">*</span></label>
+          <input type="email" name="email" id="form-email" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500
+                   focus:outline-none focus:border-purple-500 transition"
+            placeholder="admin2@tripoli-uni.edu">
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">
+            كلمة المرور <span class="text-red-400" id="pw-asterisk">*</span>
+          </label>
+          <input type="password" name="password" id="form-password"
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500
+                   focus:outline-none focus:border-purple-500 transition"
+            placeholder="••••••••">
+          <p class="text-gray-600 text-xs mt-1 hidden" id="pw-hint">اتركها فارغة للإبقاء على كلمة المرور الحالية</p>
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">الصلاحيات <span class="text-red-400">*</span></label>
+          <select name="permissions" id="form-permissions" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white
+                   focus:outline-none focus:border-purple-500 transition">
+            <option value="full_access">وصول كامل — يمكنه إدارة المديرين</option>
+            <option value="manage_users">إدارة المستخدمين فقط</option>
+            <option value="manage_grades">إدارة الدرجات فقط</option>
+          </select>
+        </div>
+
+        <div class="flex gap-3 pt-1">
+          <button type="submit"
+            class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-medium py-3 rounded-xl transition">
+            حفظ
+          </button>
+          <button type="button" id="cancel-btn" onclick="cancelEdit()"
+            class="hidden flex-1 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-xl transition">
+            إلغاء
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- List -->
+  <div class="lg:col-span-2">
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+        <h2 class="text-lg font-bold text-white">المديرون ({{ admins | length }})</h2>
+        <span class="text-xs text-gray-500">فقط مديرو "الوصول الكامل" يمكنهم إدارة هذه الصفحة</span>
+      </div>
+
+      <div class="divide-y divide-gray-800">
+        {% for a in admins %}
+        <div class="px-6 py-4 flex items-center gap-4 hover:bg-gray-800/30 transition">
+
+          <!-- Avatar -->
+          <div class="w-10 h-10 rounded-full bg-purple-900/50 flex items-center justify-center
+                      text-purple-300 font-bold text-sm flex-shrink-0">
+            {{ a.full_name[:1] }}
+          </div>
+
+          <!-- Info -->
+          <div class="min-w-0 flex-1">
+            <p class="text-white font-medium text-sm">
+              {{ a.full_name }}
+              {% if a.id == current_user.id %}
+              <span class="text-gray-500 text-xs">(أنت)</span>
+              {% endif %}
+            </p>
+            <p class="text-gray-500 text-xs font-mono mt-0.5">{{ a.email }}</p>
+          </div>
+
+          <!-- Permission badge -->
+          <span class="text-xs px-2.5 py-1 rounded-lg flex-shrink-0
+            {% if a.admin_permissions == 'full_access' or a.admin_permissions is none %}
+              bg-purple-900/50 text-purple-300
+            {% elif a.admin_permissions == 'manage_users' %}
+              bg-blue-900/50 text-blue-300
+            {% else %}
+              bg-green-900/50 text-green-300
+            {% endif %}">
+            {% if a.admin_permissions == 'full_access' or a.admin_permissions is none %}
+              وصول كامل
+            {% elif a.admin_permissions == 'manage_users' %}
+              إدارة مستخدمين
+            {% else %}
+              إدارة درجات
+            {% endif %}
+          </span>
+
+          <!-- Actions (hidden for self) -->
+          {% if a.id != current_user.id %}
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button
+              onclick="startEdit({{ a.id }}, '{{ a.full_name | replace("'", "\\'") }}', '{{ a.student_id }}', '{{ a.email }}', '{{ a.admin_permissions or 'full_access' }}')"
+              class="text-xs bg-indigo-900/40 hover:bg-indigo-900/70 border border-indigo-800
+                     text-indigo-400 hover:text-indigo-300 px-3 py-1.5 rounded-lg transition">
+              تعديل
+            </button>
+            <form method="POST" action="{{ url_for('delete_admin_staff', admin_id=a.id) }}"
+                  onsubmit="return confirm('هل تريد حذف حساب {{ a.full_name | replace("'", "\\'") }}؟')">
+              <button type="submit"
+                class="text-xs bg-red-900/40 hover:bg-red-900/70 border border-red-800
+                       text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg transition">
+                حذف
+              </button>
+            </form>
+          </div>
+          {% else %}
+          <span class="text-xs text-gray-600 flex-shrink-0">لا يمكن تعديل حسابك</span>
+          {% endif %}
+        </div>
+        {% else %}
+        <div class="px-6 py-12 text-center text-gray-500 text-sm">لا يوجد مديرون آخرون مضافون</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Info box -->
+    <div class="mt-4 bg-gray-900/60 rounded-2xl border border-gray-800 p-5 text-xs text-gray-500 space-y-2">
+      <p class="text-gray-400 font-medium mb-3">شرح مستويات الصلاحية</p>
+      <div class="flex items-start gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-purple-500 mt-0.5 flex-shrink-0"></span>
+        <p><span class="text-purple-300">وصول كامل</span> — صلاحية كاملة على جميع أقسام النظام، بما فيها إدارة حسابات المديرين الآخرين.</p>
+      </div>
+      <div class="flex items-start gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-blue-500 mt-0.5 flex-shrink-0"></span>
+        <p><span class="text-blue-300">إدارة المستخدمين فقط</span> — قبول ورفض الطلاب، إدارة المحاضرين، التسجيل المسبق، لكن لا يمكنه الوصول إلى إدارة المديرين.</p>
+      </div>
+      <div class="flex items-start gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-green-500 mt-0.5 flex-shrink-0"></span>
+        <p><span class="text-green-300">إدارة الدرجات فقط</span> — إدخال وتعديل الدرجات، التعديل الجماعي، لكن لا صلاحية على إدارة حسابات المستخدمين.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function startEdit(id, name, empId, email, perms) {
+  document.getElementById('form-title').textContent = 'تعديل المدير';
+  document.getElementById('form-action').value   = 'edit';
+  document.getElementById('form-admin-id').value = id;
+  document.getElementById('form-full-name').value = name;
+
+  const empField = document.getElementById('form-employee-id');
+  empField.value    = empId;
+  empField.disabled = true;
+  empField.classList.add('opacity-50');
+
+  const emailField = document.getElementById('form-email');
+  emailField.value    = email;
+  emailField.disabled = true;
+  emailField.classList.add('opacity-50');
+
+  document.getElementById('form-permissions').value = perms;
+  document.getElementById('pw-asterisk').style.display = 'none';
+  document.getElementById('pw-hint').classList.remove('hidden');
+  document.getElementById('cancel-btn').classList.remove('hidden');
+  document.getElementById('form-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+function cancelEdit() {
+  document.getElementById('form-title').textContent = 'إضافة مدير جديد';
+  document.getElementById('form-action').value   = 'add';
+  document.getElementById('form-admin-id').value = '';
+  document.getElementById('staff-form').reset();
+
+  const empField = document.getElementById('form-employee-id');
+  empField.disabled = false;
+  empField.classList.remove('opacity-50');
+
+  const emailField = document.getElementById('form-email');
+  emailField.disabled = false;
+  emailField.classList.remove('opacity-50');
+
+  document.getElementById('pw-asterisk').style.display = 'inline';
+  document.getElementById('pw-hint').classList.add('hidden');
+  document.getElementById('cancel-btn').classList.add('hidden');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}إنشاء حساب — بوابة جامعة طرابلس{% endblock %}
+
+{% block content %}
+<div class="min-h-[85vh] flex items-center justify-center py-8">
+  <div class="w-full max-w-lg">
+
+    <div class="text-center mb-8">
+      <!-- Dynamic logo — falls back to the "ج" block if the image is missing -->
+      <div class="flex items-center justify-center mb-4">
+        <img src="{{ system_logo_url }}"
+             alt="شعار جامعة طرابلس"
+             style="max-height:120px; width:auto;"
+             class="object-contain rounded-2xl"
+             onerror="this.style.display='none'; document.getElementById('signup-logo-fb').style.display='flex'">
+        <div id="signup-logo-fb"
+             class="w-24 h-24 bg-blue-600 rounded-2xl items-center justify-center text-5xl font-bold select-none hidden"
+             style="display:none">ج</div>
+      </div>
+      <h1 class="text-3xl font-bold text-white">إنشاء حساب جديد</h1>
+      <p class="text-gray-400 mt-2 text-sm">للطلاب المسجلين مسبقاً في سجلات الجامعة فقط</p>
+    </div>
+
+    <div class="bg-gray-900 rounded-2xl p-8 border border-gray-800 shadow-2xl">
+
+      <div class="bg-blue-900/20 border border-blue-800 rounded-xl p-4 mb-6 text-sm text-blue-200">
+        <span class="font-bold">تنبيه:</span>
+        يجب أن يكون رقم قيدك واسمك الكامل مطابقَين تماماً لما هو مسجل في قاعدة بيانات الجامعة.
+      </div>
+
+      <form method="POST" class="space-y-5">
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">رقم القيد <span class="text-red-400">*</span></label>
+          <input type="text" name="student_id" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500
+                   focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+            placeholder="مثال: 218001">
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">الاسم الكامل <span class="text-red-400">*</span></label>
+          <input type="text" name="full_name" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500
+                   focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+            placeholder="الاسم كما هو مسجل في الجامعة">
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">البريد الإلكتروني <span class="text-red-400">*</span></label>
+          <input type="email" name="email" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500
+                   focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+            placeholder="example@gmail.com">
+          <p class="text-gray-500 text-xs mt-1">يُقبل فقط: @gmail.com أو @yahoo.com</p>
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">كلمة المرور <span class="text-red-400">*</span></label>
+          <input type="password" name="password" required minlength="8"
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500
+                   focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+            placeholder="8 أحرف على الأقل">
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">تأكيد كلمة المرور <span class="text-red-400">*</span></label>
+          <input type="password" name="confirm_password" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500
+                   focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+            placeholder="أعد كتابة كلمة المرور">
+        </div>
+
+        <button type="submit"
+          class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3 rounded-xl transition">
+          إنشاء الحساب
+        </button>
+      </form>
+
+      <p class="mt-6 text-center text-gray-400 text-sm">
+        لديك حساب بالفعل؟
+        <a href="{{ url_for('login') }}" class="text-blue-400 hover:text-blue-300 transition">تسجيل الدخول</a>
+      </p>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

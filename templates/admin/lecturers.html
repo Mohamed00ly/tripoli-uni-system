@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% block title %}المحاضرون — لوحة الإدارة{% endblock %}
+
+{% block content %}
+<div class="mb-8 flex items-center justify-between">
+  <div>
+    <h1 class="text-3xl font-bold text-white">إدارة المحاضرين</h1>
+    <p class="text-gray-400 mt-1 text-sm">{{ lecturers | length }} محاضر</p>
+  </div>
+  <a href="{{ url_for('add_lecturer') }}"
+     class="bg-yellow-600 hover:bg-yellow-700 text-white text-sm px-5 py-2.5 rounded-xl transition flex items-center gap-2">
+    <span>+</span> إضافة محاضر
+  </a>
+</div>
+
+{% if lecturers %}
+<div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-800 text-gray-400 text-xs">
+          <th class="text-right px-5 py-4 font-medium">المحاضر</th>
+          <th class="text-right px-5 py-4 font-medium">الرقم الوظيفي</th>
+          <th class="text-right px-5 py-4 font-medium hidden md:table-cell">البريد الإلكتروني</th>
+          <th class="text-right px-5 py-4 font-medium hidden lg:table-cell">القسم</th>
+          <th class="text-right px-5 py-4 font-medium hidden lg:table-cell">الوثائق</th>
+          <th class="text-right px-5 py-4 font-medium">الإجراءات</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-800">
+        {% for lec in lecturers %}
+        {% set docs = lec.documents.all() %}
+        <tr class="hover:bg-gray-800/40 transition">
+          <!-- Name + avatar -->
+          <td class="px-5 py-4">
+            <div class="flex items-center gap-3">
+              {% if lec.profile_image %}
+              <img src="{{ url_for('serve_upload', filename=lec.profile_image) }}"
+                   alt="{{ lec.full_name }}"
+                   class="w-9 h-9 rounded-full object-cover flex-shrink-0">
+              {% else %}
+              <div class="w-9 h-9 rounded-full bg-yellow-900/50 flex items-center justify-center text-yellow-300 font-bold text-sm flex-shrink-0">
+                {{ lec.full_name[0] }}
+              </div>
+              {% endif %}
+              <div>
+                <p class="text-white font-medium">{{ lec.full_name }}</p>
+                {% if lec.birth_date %}
+                <p class="text-gray-600 text-xs">{{ lec.birth_date.strftime('%Y-%m-%d') }}</p>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+
+          <td class="px-5 py-4 font-mono text-gray-300 text-xs">{{ lec.student_id }}</td>
+          <td class="px-5 py-4 text-gray-400 text-xs hidden md:table-cell">{{ lec.email }}</td>
+
+          <td class="px-5 py-4 hidden lg:table-cell">
+            {% if lec.department %}
+            <span class="text-gray-300 text-xs">{{ lec.department.name_ar }}</span>
+            {% else %}
+            <span class="text-gray-600 text-xs">—</span>
+            {% endif %}
+          </td>
+
+          <td class="px-5 py-4 hidden lg:table-cell">
+            <div class="flex items-center gap-2">
+              {% set bc = docs | selectattr('document_type', 'equalto', 'birth_certificate') | list %}
+              {% set ql = docs | selectattr('document_type', 'equalto', 'qualification')    | list %}
+              {% if bc %}
+              <a href="{{ url_for('serve_upload', filename=bc[0].filename) }}" target="_blank"
+                 class="text-xs bg-blue-900/50 text-blue-400 px-2 py-0.5 rounded hover:bg-blue-900/80 transition" title="شهادة الميلاد">&#128196;</a>
+              {% else %}
+              <span class="text-xs text-gray-700">&#128196;</span>
+              {% endif %}
+              {% if ql %}
+              <a href="{{ url_for('serve_upload', filename=ql[0].filename) }}" target="_blank"
+                 class="text-xs bg-green-900/50 text-green-400 px-2 py-0.5 rounded hover:bg-green-900/80 transition" title="المؤهل العلمي">&#127891;</a>
+              {% else %}
+              <span class="text-xs text-gray-700">&#127891;</span>
+              {% endif %}
+            </div>
+          </td>
+
+          <td class="px-5 py-4">
+            <div class="flex items-center gap-2">
+              <a href="{{ url_for('edit_lecturer', user_id=lec.id) }}"
+                 class="bg-indigo-700 hover:bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-lg transition">
+                تعديل
+              </a>
+              <form method="POST" action="{{ url_for('delete_lecturer', user_id=lec.id) }}" class="inline"
+                    onsubmit="return confirm('هل أنت متأكد من حذف {{ lec.full_name }}؟')">
+                <button class="bg-red-900 hover:bg-red-800 text-red-300 text-xs px-3 py-1.5 rounded-lg transition">حذف</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="bg-gray-900 rounded-2xl border border-gray-800 p-16 text-center">
+  <p class="text-gray-400 mb-4">لا يوجد محاضرون مسجلون</p>
+  <a href="{{ url_for('add_lecturer') }}"
+     class="bg-yellow-600 hover:bg-yellow-700 text-white text-sm px-6 py-2.5 rounded-xl transition inline-block">
+    إضافة أول محاضر
+  </a>
+</div>
+{% endif %}
+{% endblock %}

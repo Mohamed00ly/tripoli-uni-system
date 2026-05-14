@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}لوحتي — بوابة جامعة طرابلس{% endblock %}
+
+{% block content %}
+
+{% if current_user.status == 'pending' %}
+<div class="flex items-center gap-3 bg-yellow-900/20 border border-yellow-800 rounded-xl p-4 mb-6 text-sm text-yellow-200">
+  <span class="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse flex-shrink-0"></span>
+  حسابك قيد المراجعة من قبل الإدارة. سيتم إشعارك عند الموافقة.
+</div>
+{% elif current_user.status == 'rejected' %}
+<div class="bg-red-900/20 border border-red-800 rounded-xl p-4 mb-6 text-sm text-red-200">
+  تم رفض طلبك. يرجى التواصل مع إدارة القبول لمزيد من التفاصيل.
+</div>
+{% endif %}
+
+<div class="mb-8">
+  <h1 class="text-3xl font-bold text-white">مرحباً، {{ current_user.full_name }}</h1>
+  <p class="text-gray-500 mt-1 text-sm">رقم القيد: <span class="font-mono text-gray-300">{{ current_user.student_id }}</span></p>
+</div>
+
+<!-- Stats -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
+  <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+    <p class="text-gray-400 text-xs mb-3">حالة الحساب</p>
+    <p class="text-2xl font-bold
+      {% if current_user.status == 'approved' %}text-green-400
+      {% elif current_user.status == 'pending' %}text-yellow-400
+      {% else %}text-red-400{% endif %}">
+      {% if current_user.status == 'approved' %}مقبول
+      {% elif current_user.status == 'pending' %}قيد المراجعة
+      {% else %}مرفوض{% endif %}
+    </p>
+  </div>
+
+  <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+    <p class="text-gray-400 text-xs mb-3">الحالة المالية</p>
+    <p class="text-2xl font-bold {% if current_user.financial_status == 'paid' %}text-green-400{% else %}text-red-400{% endif %}">
+      {% if current_user.financial_status == 'paid' %}مدفوع{% else %}غير مدفوع{% endif %}
+    </p>
+  </div>
+
+  <div class="bg-gray-900 rounded-2xl p-6 border border-gray-800">
+    <p class="text-gray-400 text-xs mb-3">المواد المسجلة</p>
+    <p class="text-2xl font-bold text-white">{{ enrollments | length }}</p>
+  </div>
+</div>
+
+<!-- Enrollments table -->
+<div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+    <h2 class="text-lg font-bold text-white">المواد المسجلة</h2>
+    {% if current_user.status == 'approved' and current_user.financial_status == 'paid' %}
+    <a href="{{ url_for('enrollment') }}"
+       class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition">
+      + تسجيل مادة
+    </a>
+    {% endif %}
+  </div>
+
+  {% if enrollments %}
+  <div class="divide-y divide-gray-800">
+    {% for e in enrollments %}
+    <div class="px-6 py-4 flex items-center justify-between gap-4">
+      <div>
+        <p class="text-white font-medium">{{ e.course.name_ar }}</p>
+        <p class="text-gray-500 text-sm font-mono">{{ e.course.code }} &bull; الفصل {{ e.semester }} / {{ e.year }}</p>
+      </div>
+      <div class="flex items-center gap-4 flex-shrink-0">
+        {% if e.grade is not none %}
+        <span class="text-lg font-bold {% if e.grade >= 50 %}text-green-400{% else %}text-red-400{% endif %}">{{ e.grade }}</span>
+        {% else %}
+        <span class="text-gray-600 text-sm">لا توجد درجة</span>
+        {% endif %}
+        <span class="px-3 py-1 rounded-full text-xs
+          {% if e.status == 'enrolled'   %}bg-blue-900/50   text-blue-300
+          {% elif e.status == 'completed'%}bg-green-900/50  text-green-300
+          {% else %}bg-gray-800 text-gray-400{% endif %}">
+          {% if e.status == 'enrolled' %}مسجل{% elif e.status == 'completed' %}مكتمل{% else %}{{ e.status }}{% endif %}
+        </span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="px-6 py-16 text-center">
+    <p class="text-gray-500 mb-3">لم تسجل في أي مادة بعد</p>
+    {% if current_user.status == 'approved' and current_user.financial_status == 'paid' %}
+    <a href="{{ url_for('enrollment') }}" class="text-blue-400 hover:text-blue-300 transition text-sm">ابدأ التسجيل ←</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

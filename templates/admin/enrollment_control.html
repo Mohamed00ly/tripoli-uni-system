@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+{% block title %}التحكم بالتسجيل — لوحة الإدارة{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+  <a href="{{ url_for('admin_dashboard') }}" class="text-gray-500 hover:text-gray-300 text-sm transition">← لوحة الإدارة</a>
+  <h1 class="text-3xl font-bold text-white mt-4">التحكم بتسجيل الطلاب</h1>
+  <p class="text-gray-400 mt-1 text-sm">إسقاط المواد الدراسية لأي طالب بصرف النظر عن حالته المالية</p>
+</div>
+
+<!-- Search bar -->
+<div class="bg-gray-900 rounded-2xl border border-gray-800 p-5 mb-6">
+  <form method="GET" class="flex gap-3">
+    <div class="relative flex-1">
+      <span class="absolute inset-y-0 right-4 flex items-center text-gray-500 text-sm">&#128269;</span>
+      <input type="text" name="q" value="{{ q }}"
+        placeholder="ابحث باسم الطالب أو رقم القيد..."
+        class="w-full bg-gray-800 border border-gray-700 rounded-xl pr-10 pl-4 py-3 text-white
+               placeholder-gray-500 focus:outline-none focus:border-blue-500 transition">
+    </div>
+    <button type="submit"
+      class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl transition font-medium">
+      بحث
+    </button>
+    {% if q %}
+    <a href="{{ url_for('admin_enrollment_control') }}"
+       class="bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-3 rounded-xl transition text-sm flex items-center">
+      مسح
+    </a>
+    {% endif %}
+  </form>
+</div>
+
+{% if q %}
+  {% if students %}
+  <p class="text-gray-500 text-xs mb-4">{{ students | length }} نتيجة لـ "{{ q }}"</p>
+
+    {% for student in students %}
+    {% set enrollments = student_enrollments.get(student.id, []) %}
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 mb-4 overflow-hidden">
+
+      <!-- Student header -->
+      <div class="px-6 py-4 bg-gray-800/40 border-b border-gray-800 flex items-center justify-between gap-4">
+        <div class="min-w-0 flex-1">
+          <p class="text-white font-bold">{{ student.full_name }}</p>
+          <div class="flex flex-wrap items-center gap-3 mt-1">
+            <span class="text-gray-400 text-xs font-mono">{{ student.student_id }}</span>
+            {% if student.department %}
+            <span class="text-xs bg-indigo-900/40 text-indigo-300 px-2 py-0.5 rounded">
+              {{ student.department.name_ar }}
+            </span>
+            {% endif %}
+            <span class="text-xs px-2 py-0.5 rounded
+              {% if student.financial_status == 'paid' %}bg-green-900/40 text-green-300
+              {% else %}bg-red-900/40 text-red-300{% endif %}">
+              {% if student.financial_status == 'paid' %}مدفوع{% else %}غير مدفوع{% endif %}
+            </span>
+            <span class="text-xs px-2 py-0.5 rounded
+              {% if student.status == 'approved' %}bg-green-900/30 text-green-400
+              {% elif student.status == 'pending' %}bg-yellow-900/30 text-yellow-400
+              {% else %}bg-red-900/30 text-red-400{% endif %}">
+              {% if student.status == 'approved' %}مقبول{% elif student.status == 'pending' %}قيد المراجعة{% else %}مرفوض{% endif %}
+            </span>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 flex-shrink-0">
+          <span class="text-gray-500 text-xs">{{ enrollments | length }} مادة مسجلة</span>
+          <a href="{{ url_for('admin_transcript', user_id=student.id) }}"
+             class="text-xs text-blue-400 hover:text-blue-300 transition">
+            كشف الدرجات →
+          </a>
+        </div>
+      </div>
+
+      <!-- Enrolled courses -->
+      {% if enrollments %}
+      <div class="divide-y divide-gray-800/60">
+        {% for e in enrollments %}
+        <div class="px-6 py-4 flex items-center justify-between gap-4">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-3">
+              <span class="text-gray-500 text-xs font-mono flex-shrink-0">{{ e.course.code }}</span>
+              <span class="text-white text-sm font-medium">{{ e.course.name_ar }}</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-4 mt-1 text-xs text-gray-500">
+              <span>{{ e.course.credits }} ساعات</span>
+              <span>{{ e.course.department.name_ar }}</span>
+              {% if e.grade is not none %}
+              <span class="{% if e.grade >= 50 %}text-green-400{% else %}text-red-400{% endif %}">
+                الدرجة: {{ e.grade }}
+                {% if e.grade >= 50 %}(ناجح){% else %}(راسب){% endif %}
+              </span>
+              {% else %}
+              <span class="text-gray-600">قيد الدراسة</span>
+              {% endif %}
+            </div>
+          </div>
+          <form method="POST"
+                action="{{ url_for('admin_drop_enrollment', enrollment_id=e.id) }}"
+                onsubmit="return confirm('إسقاط {{ e.course.name_ar }} للطالب {{ student.full_name | replace("'", "\\'") }}؟\n\nهذا الإجراء سيعكس فورياً في بوابة الطالب.')">
+            <input type="hidden" name="q" value="{{ q }}">
+            <button type="submit"
+              class="text-xs bg-red-900/40 hover:bg-red-900/70 border border-red-800
+                     text-red-400 hover:text-red-300 px-4 py-2 rounded-xl transition
+                     flex items-center gap-2 whitespace-nowrap">
+              &#128466; إسقاط المادة
+            </button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="px-6 py-8 text-center text-gray-500 text-sm">
+        لا يوجد تسجيل نشط لهذا الطالب في الفصل الحالي
+      </div>
+      {% endif %}
+
+    </div>
+    {% endfor %}
+
+  {% else %}
+  <div class="bg-gray-900 rounded-2xl border border-gray-800 p-12 text-center">
+    <div class="text-4xl mb-3 text-gray-600">&#128269;</div>
+    <p class="text-gray-400 text-sm">لا يوجد طلاب يطابقون "{{ q }}"</p>
+  </div>
+  {% endif %}
+
+{% else %}
+<!-- Empty state -->
+<div class="bg-gray-900 rounded-2xl border border-gray-800 p-14 text-center">
+  <div class="text-5xl mb-5">&#128101;</div>
+  <p class="text-white font-medium mb-2">ابحث عن طالب لإدارة تسجيله</p>
+  <p class="text-gray-500 text-sm">يمكنك إسقاط أي مادة مسجلة بصرف النظر عن الحالة المالية للطالب</p>
+</div>
+
+<!-- Quick info -->
+<div class="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+  <div class="bg-gray-900/60 rounded-2xl border border-gray-800 p-5 text-sm">
+    <div class="text-2xl mb-3">&#128274;</div>
+    <p class="text-white font-medium text-sm mb-1">تجاوز القفل المالي</p>
+    <p class="text-gray-500 text-xs">يُتيح للإدارة إسقاط مواد الطلاب المدفوعين الذين يُمنعون عادةً من الإسقاط بأنفسهم.</p>
+  </div>
+  <div class="bg-gray-900/60 rounded-2xl border border-gray-800 p-5 text-sm">
+    <div class="text-2xl mb-3">&#9889;</div>
+    <p class="text-white font-medium text-sm mb-1">تحديث فوري</p>
+    <p class="text-gray-500 text-xs">بمجرد إسقاط المادة، تظهر في بوابة الطالب فوراً كـ"أُسقطت بواسطة الإدارة".</p>
+  </div>
+  <div class="bg-gray-900/60 rounded-2xl border border-gray-800 p-5 text-sm">
+    <div class="text-2xl mb-3">&#128216;</div>
+    <p class="text-white font-medium text-sm mb-1">مُسجَّل في السجل</p>
+    <p class="text-gray-500 text-xs">جميع عمليات الإسقاط الإداري مُدوَّنة في
+      <a href="{{ url_for('admin_audit_log') }}" class="text-blue-400 hover:text-blue-300 underline">سجل العمليات</a>
+      مع اسم المدير المنفِّذ.
+    </p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

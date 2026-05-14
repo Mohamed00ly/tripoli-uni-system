@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+{% block title %}كشف الدرجات — {{ student.full_name }}{% endblock %}
+
+{% block content %}
+<!-- Print button (hidden when printing) -->
+<div class="no-print flex items-center justify-between mb-6">
+  <a href="{{ url_for('dashboard') if current_user.is_student else url_for('admin_students') }}"
+     class="text-gray-500 hover:text-gray-300 text-sm transition">← رجوع</a>
+  <button onclick="window.print()"
+    class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-5 py-2 rounded-xl transition flex items-center gap-2">
+    <span>&#128438;</span> طباعة / حفظ PDF
+  </button>
+</div>
+
+<!-- Transcript card -->
+<div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden print:border-0 print:rounded-none print:bg-white print:text-black max-w-4xl mx-auto">
+
+  <!-- Header with logo -->
+  <div class="bg-blue-700 print:bg-blue-700 px-8 py-6 text-white text-center">
+    <div class="flex items-center justify-center gap-4 mb-3">
+      <img src="{{ url_for('static', filename='img/logo.png') }}"
+           alt="جامعة طرابلس"
+           class="h-16 w-16 object-contain"
+           onerror="this.style.display='none'">
+    </div>
+    <h1 class="text-2xl font-bold">جامعة طرابلس</h1>
+    <p class="text-blue-200 text-sm mt-1">University of Tripoli — Academic Transcript</p>
+    <p class="text-blue-100 text-xs mt-2">كشف الدرجات الرسمي</p>
+  </div>
+
+  <div class="p-8">
+
+    <!-- Student info -->
+    <div class="grid grid-cols-2 gap-6 mb-8 pb-6 border-b border-gray-800 print:border-gray-300">
+      <div class="space-y-2">
+        <div>
+          <span class="text-gray-400 text-xs">اسم الطالب</span>
+          <p class="text-white font-bold text-lg print:text-black">{{ student.full_name }}</p>
+        </div>
+        <div>
+          <span class="text-gray-400 text-xs">رقم القيد</span>
+          <p class="text-white font-mono print:text-black">{{ student.student_id }}</p>
+        </div>
+      </div>
+      <div class="space-y-2">
+        <div>
+          <span class="text-gray-400 text-xs">القسم</span>
+          <p class="text-white print:text-black">{{ student.department.name_ar if student.department else 'غير محدد' }}</p>
+        </div>
+        <div>
+          <span class="text-gray-400 text-xs">تاريخ الطباعة</span>
+          <p class="text-white print:text-black">{{ now().strftime('%Y-%m-%d') if now is defined else '' }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grades table -->
+    <h2 class="text-lg font-bold text-white print:text-black mb-4">سجل المواد الدراسية</h2>
+
+    {% if enrollments %}
+    <div class="overflow-x-auto mb-8">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b-2 border-gray-700 print:border-gray-400 text-xs text-gray-400 print:text-gray-600">
+            <th class="text-right pb-3 pr-0 font-medium">رمز المادة</th>
+            <th class="text-right pb-3 font-medium">اسم المادة</th>
+            <th class="text-right pb-3 font-medium">الفصل/السنة</th>
+            <th class="text-center pb-3 font-medium">أعمال</th>
+            <th class="text-center pb-3 font-medium">امتحان</th>
+            <th class="text-center pb-3 font-medium">المجموع</th>
+            <th class="text-center pb-3 font-medium">الساعات</th>
+            <th class="text-center pb-3 font-medium">النتيجة</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-800 print:divide-gray-200">
+          {% for e in enrollments %}
+          <tr>
+            <td class="py-3 pr-0 font-mono text-gray-400 text-xs print:text-gray-600">{{ e.course.code }}</td>
+            <td class="py-3 text-white print:text-black font-medium">{{ e.course.name_ar }}</td>
+            <td class="py-3 text-gray-400 text-xs print:text-gray-600">{{ e.semester }}/{{ e.year }}</td>
+            <td class="py-3 text-center text-gray-300 print:text-gray-700">
+              {{ e.classwork_grade if e.classwork_grade is not none else '—' }}
+            </td>
+            <td class="py-3 text-center text-gray-300 print:text-gray-700">
+              {{ e.final_grade if e.final_grade is not none else '—' }}
+            </td>
+            <td class="py-3 text-center font-bold
+              {% if e.grade is not none %}{% if e.grade >= 50 %}text-green-400 print:text-green-700{% else %}text-red-400 print:text-red-700{% endif %}{% else %}text-gray-600{% endif %}">
+              {{ e.grade if e.grade is not none else '—' }}
+            </td>
+            <td class="py-3 text-center text-gray-400 print:text-gray-600">{{ e.course.credits }}</td>
+            <td class="py-3 text-center">
+              {% if e.grade is not none %}
+              <span class="px-2 py-0.5 rounded text-xs font-medium
+                {% if e.grade >= 50 %}bg-green-900/50 text-green-400 print:bg-green-100 print:text-green-700{% else %}bg-red-900/50 text-red-400 print:bg-red-100 print:text-red-700{% endif %}">
+                {% if e.grade >= 50 %}ناجح{% else %}راسب{% endif %}
+              </span>
+              {% else %}
+              <span class="text-gray-600 text-xs">قيد الدراسة</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-gray-500 text-sm mb-8">لم يُسجل في أي مادة بعد.</p>
+    {% endif %}
+
+    <!-- GPA summary -->
+    <div class="bg-gray-800/50 print:bg-gray-100 rounded-2xl p-6 flex items-center justify-between">
+      <div>
+        <p class="text-gray-400 text-xs print:text-gray-600 mb-1">المعدل التراكمي (GPA)</p>
+        <p class="text-4xl font-bold {% if gpa >= 2 %}text-green-400 print:text-green-700{% else %}text-red-400 print:text-red-700{% endif %}">
+          {{ gpa }} / 4.0
+        </p>
+      </div>
+      <div class="text-center">
+        <p class="text-gray-400 text-xs print:text-gray-600 mb-1">إجمالي الساعات</p>
+        <p class="text-2xl font-bold text-white print:text-black">
+          {{ enrollments | selectattr('grade') | map(attribute='course') | map(attribute='credits') | sum }}
+        </p>
+      </div>
+      <div class="text-left">
+        <p class="text-gray-400 text-xs print:text-gray-600 mb-1">حالة التسجيل</p>
+        <p class="text-white font-medium print:text-black">{{ 'مقبول' if student.status == 'approved' else 'قيد المراجعة' }}</p>
+      </div>
+    </div>
+
+    <!-- Signature area -->
+    <div class="mt-10 grid grid-cols-2 gap-8 text-center text-xs text-gray-600 print:text-gray-400">
+      <div>
+        <div class="border-t border-gray-700 print:border-gray-400 pt-2 mt-8">توقيع رئيس القسم</div>
+      </div>
+      <div>
+        <div class="border-t border-gray-700 print:border-gray-400 pt-2 mt-8">توقيع مدير الشؤون الأكاديمية</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+@media print {
+  body { background: white !important; color: black !important; }
+  .print\:bg-white { background: white !important; }
+  .print\:text-black { color: black !important; }
+  img { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+</style>
+{% endblock %}

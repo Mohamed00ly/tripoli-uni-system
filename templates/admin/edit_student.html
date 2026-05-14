@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+{% block title %}تعديل الطالب — {{ student.full_name }}{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+  <a href="{{ url_for('admin_students') }}" class="text-gray-500 hover:text-gray-300 text-sm transition">← العودة لقائمة الطلاب</a>
+  <h1 class="text-xl font-bold text-white">تعديل: {{ student.full_name }}</h1>
+</div>
+
+<form method="POST" enctype="multipart/form-data" class="space-y-6">
+
+  <!-- Basic info -->
+  <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+    <h2 class="text-lg font-bold text-white mb-5">البيانات الأساسية</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+      <div>
+        <label class="block text-gray-300 text-sm mb-2">الاسم الكامل</label>
+        <input type="text" name="full_name" value="{{ student.full_name }}" required
+          class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition">
+      </div>
+
+      <div>
+        <label class="block text-gray-300 text-sm mb-2">رقم القيد</label>
+        <input type="text" value="{{ student.student_id }}" disabled
+          class="w-full bg-gray-800/50 border border-gray-700 rounded-xl px-4 py-3 text-gray-500 cursor-not-allowed">
+      </div>
+
+      <div>
+        <label class="block text-gray-300 text-sm mb-2">حالة الحساب</label>
+        <select name="status" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition">
+          <option value="pending"  {% if student.status == 'pending'  %}selected{% endif %}>قيد المراجعة</option>
+          <option value="approved" {% if student.status == 'approved' %}selected{% endif %}>مقبول</option>
+          <option value="rejected" {% if student.status == 'rejected' %}selected{% endif %}>مرفوض</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-gray-300 text-sm mb-2">الحالة المالية</label>
+        <select name="financial_status" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition">
+          <option value="unpaid" {% if student.financial_status == 'unpaid' %}selected{% endif %}>غير مدفوع</option>
+          <option value="paid"   {% if student.financial_status == 'paid'   %}selected{% endif %}>مدفوع</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-gray-300 text-sm mb-2">القسم</label>
+        <select name="department_id" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition">
+          <option value="">— غير محدد —</option>
+          {% for d in departments %}
+          <option value="{{ d.id }}" {% if student.department_id == d.id %}selected{% endif %}>{{ d.name_ar }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-gray-300 text-sm mb-2">تاريخ الميلاد</label>
+        <input type="date" name="birth_date"
+          value="{{ student.birth_date.strftime('%Y-%m-%d') if student.birth_date else '' }}"
+          class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition">
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Document vault -->
+  <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+    <h2 class="text-lg font-bold text-white mb-5">خزينة الوثائق</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <!-- Birth certificate -->
+      <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+        <p class="text-gray-300 text-sm font-medium mb-3">&#128196; شهادة الميلاد</p>
+        {% if docs_by_type.get('birth_certificate') %}
+        <div class="mb-3 flex items-center gap-2">
+          <span class="text-green-400 text-xs">&#10003; مرفوعة:</span>
+          <a href="{{ url_for('serve_upload', filename=docs_by_type['birth_certificate'].filename) }}"
+             target="_blank" class="text-blue-400 hover:text-blue-300 text-xs transition truncate max-w-48">
+            {{ docs_by_type['birth_certificate'].original_name }}
+          </a>
+        </div>
+        {% else %}
+        <p class="text-gray-600 text-xs mb-3">لم تُرفع بعد</p>
+        {% endif %}
+        <input type="file" name="birth_certificate" accept=".pdf,.jpg,.jpeg,.png"
+          class="w-full text-xs text-gray-400 file:bg-gray-700 file:border-0 file:text-gray-200 file:rounded-lg file:px-3 file:py-1.5 file:ml-3 file:cursor-pointer hover:file:bg-gray-600 transition">
+        <p class="text-gray-600 text-xs mt-1">PDF, JPG, PNG — اختياري</p>
+      </div>
+
+      <!-- Qualification -->
+      <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+        <p class="text-gray-300 text-sm font-medium mb-3">&#127891; المؤهل العلمي</p>
+        {% if docs_by_type.get('qualification') %}
+        <div class="mb-3 flex items-center gap-2">
+          <span class="text-green-400 text-xs">&#10003; مرفوع:</span>
+          <a href="{{ url_for('serve_upload', filename=docs_by_type['qualification'].filename) }}"
+             target="_blank" class="text-blue-400 hover:text-blue-300 text-xs transition truncate max-w-48">
+            {{ docs_by_type['qualification'].original_name }}
+          </a>
+        </div>
+        {% else %}
+        <p class="text-gray-600 text-xs mb-3">لم يُرفع بعد</p>
+        {% endif %}
+        <input type="file" name="qualification" accept=".pdf,.jpg,.jpeg,.png"
+          class="w-full text-xs text-gray-400 file:bg-gray-700 file:border-0 file:text-gray-200 file:rounded-lg file:px-3 file:py-1.5 file:ml-3 file:cursor-pointer hover:file:bg-gray-600 transition">
+        <p class="text-gray-600 text-xs mt-1">PDF, JPG, PNG — اختياري</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Grades per enrollment -->
+  {% if enrollments %}
+  <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+    <h2 class="text-lg font-bold text-white mb-5">الدرجات</h2>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-gray-800 text-gray-400 text-xs">
+            <th class="text-right pb-3 font-medium">المادة</th>
+            <th class="text-right pb-3 font-medium">الفصل</th>
+            <th class="text-center pb-3 font-medium">أعمال (0–100)</th>
+            <th class="text-center pb-3 font-medium">امتحان (0–100)</th>
+            <th class="text-center pb-3 font-medium">المجموع</th>
+            <th class="text-center pb-3 font-medium">الحالة</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-800">
+          {% for e in enrollments %}
+          {% set f = formulas.get(e.course_id) %}
+          {% set cw_w = f.classwork_weight if f else 40 %}
+          {% set fw_w = f.final_weight     if f else 60 %}
+          <tr class="grade-row hover:bg-gray-800/30 transition" data-cw="{{ cw_w }}" data-fw="{{ fw_w }}">
+            <td class="py-3 text-white font-medium">
+              {{ e.course.name_ar }}
+              <span class="text-gray-600 text-xs font-mono ml-1">({{ cw_w }}%+{{ fw_w }}%)</span>
+            </td>
+            <td class="py-3 text-gray-400 text-xs">{{ e.semester }}/{{ e.year }}</td>
+            <td class="py-3 text-center">
+              <input type="number" name="cw_{{ e.id }}"
+                value="{{ e.classwork_grade if e.classwork_grade is not none else '' }}"
+                min="0" max="100" step="0.5" placeholder="—"
+                class="cw-input w-20 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-center text-sm
+                       focus:outline-none focus:border-blue-500 transition">
+            </td>
+            <td class="py-3 text-center">
+              <input type="number" name="final_{{ e.id }}"
+                value="{{ e.final_grade if e.final_grade is not none else '' }}"
+                min="0" max="100" step="0.5" placeholder="—"
+                class="final-input w-20 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-center text-sm
+                       focus:outline-none focus:border-green-500 transition">
+            </td>
+            <td class="py-3 text-center">
+              <span class="total-display font-bold text-gray-600">
+                {{ e.grade if e.grade is not none else '—' }}
+              </span>
+            </td>
+            <td class="py-3 text-center">
+              <span class="status-badge px-2 py-0.5 rounded-full text-xs font-medium
+                {% if e.grade is not none %}
+                  {% if e.grade >= 50 %}bg-green-900/50 text-green-400{% else %}bg-red-900/50 text-red-400{% endif %}
+                {% else %}bg-gray-800 text-gray-500{% endif %}">
+                {% if e.grade is not none %}{% if e.grade >= 50 %}ناجح{% else %}راسب{% endif %}{% else %}—{% endif %}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Submit -->
+  <div class="flex items-center justify-between">
+    <a href="{{ url_for('admin_students') }}"
+       class="text-gray-400 hover:text-gray-200 text-sm transition">إلغاء</a>
+    <button type="submit"
+      class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-10 py-3 rounded-xl transition">
+      حفظ التعديلات
+    </button>
+  </div>
+
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  function updateRow(row) {
+    const cwInput    = row.querySelector('.cw-input');
+    const finalInput = row.querySelector('.final-input');
+    const totalEl    = row.querySelector('.total-display');
+    const statusEl   = row.querySelector('.status-badge');
+    const cwW        = parseInt(row.dataset.cw) || 40;
+    const fwW        = parseInt(row.dataset.fw) || 60;
+    const cw         = parseFloat(cwInput.value)    || null;
+    const final      = parseFloat(finalInput.value) || null;
+
+    if (cw !== null && final !== null) {
+      const t = Math.round(((cw * cwW) + (final * fwW)) / 100 * 10) / 10;
+      totalEl.textContent = t.toFixed(1);
+      totalEl.className   = 'total-display font-bold ' + (t >= 50 ? 'text-green-400' : 'text-red-400');
+      if (statusEl) {
+        statusEl.textContent = t >= 50 ? 'ناجح' : 'راسب';
+        statusEl.className   = 'status-badge px-2 py-0.5 rounded-full text-xs font-medium ' +
+          (t >= 50 ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400');
+      }
+    } else {
+      totalEl.textContent = '—';
+      totalEl.className   = 'total-display font-bold text-gray-600';
+    }
+  }
+
+  document.querySelectorAll('.grade-row').forEach(row => {
+    row.querySelectorAll('input[type=number]').forEach(inp => inp.addEventListener('input', () => updateRow(row)));
+    updateRow(row);
+  });
+});
+</script>
+{% endblock %}

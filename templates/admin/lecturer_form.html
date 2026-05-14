@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }} — لوحة الإدارة{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+  <a href="{{ url_for('admin_lecturers') }}" class="text-gray-500 hover:text-gray-300 text-sm transition">← العودة للمحاضرين</a>
+  <h1 class="text-xl font-bold text-white">{{ title }}</h1>
+</div>
+
+<form method="POST" enctype="multipart/form-data" class="space-y-6 max-w-3xl">
+
+  <!-- Profile image preview -->
+  <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+    <h2 class="text-lg font-bold text-white mb-5">الصورة الشخصية</h2>
+    <div class="flex items-center gap-6">
+      <div id="img-preview" class="w-24 h-24 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+        {% if lecturer and lecturer.profile_image %}
+        <img src="{{ url_for('serve_upload', filename=lecturer.profile_image) }}"
+             alt="{{ lecturer.full_name }}" class="w-full h-full object-cover">
+        {% else %}
+        <span class="text-gray-600 text-3xl">&#128100;</span>
+        {% endif %}
+      </div>
+      <div class="flex-1">
+        <input type="file" name="profile_image" id="profile_image" accept=".jpg,.jpeg,.png,.gif,.webp"
+          class="w-full text-sm text-gray-400 file:bg-gray-700 file:border-0 file:text-gray-200 file:rounded-lg file:px-4 file:py-2 file:ml-3 file:cursor-pointer hover:file:bg-gray-600 transition">
+        <p class="text-gray-600 text-xs mt-2">JPG, PNG, GIF, WEBP — اختياري</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Basic info -->
+  <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+    <h2 class="text-lg font-bold text-white mb-5">البيانات الأساسية</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+      <div>
+        <label class="block text-gray-300 text-sm mb-2">الاسم الكامل <span class="text-red-400">*</span></label>
+        <input type="text" name="full_name" required
+          value="{{ lecturer.full_name if lecturer else '' }}"
+          placeholder="د. محمد عبدالله"
+          class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition">
+      </div>
+
+      <div>
+        <label class="block text-gray-300 text-sm mb-2">الرقم الوظيفي <span class="text-red-400">*</span></label>
+        <input type="text" name="student_id"
+          value="{{ lecturer.student_id if lecturer else '' }}"
+          {% if lecturer %}disabled class="w-full bg-gray-800/50 border border-gray-700 rounded-xl px-4 py-3 text-gray-500 cursor-not-allowed"
+          {% else %}required placeholder="LEC002" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition"{% endif %}>
+      </div>
+
+      <div>
+        <label class="block text-gray-300 text-sm mb-2">البريد الإلكتروني <span class="text-red-400">*</span></label>
+        <input type="email" name="email"
+          value="{{ lecturer.email if lecturer else '' }}"
+          {% if lecturer %}disabled class="w-full bg-gray-800/50 border border-gray-700 rounded-xl px-4 py-3 text-gray-500 cursor-not-allowed"
+          {% else %}required placeholder="lecturer@example.com" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition"{% endif %}>
+      </div>
+
+      <div>
+        <label class="block text-gray-300 text-sm mb-2">
+          كلمة المرور {% if lecturer %}<span class="text-gray-500 text-xs">(اتركها فارغة للإبقاء على الحالية)</span>{% else %}<span class="text-red-400">*</span>{% endif %}
+        </label>
+        <input type="password" name="password"
+          {% if not lecturer %}required{% endif %}
+          placeholder="{% if lecturer %}• • • • • • • •{% else %}8 أحرف على الأقل{% endif %}"
+          class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition">
+      </div>
+
+      <div>
+        <label class="block text-gray-300 text-sm mb-2">القسم</label>
+        <select name="department_id" class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition">
+          <option value="">— غير محدد —</option>
+          {% for d in departments %}
+          <option value="{{ d.id }}" {% if lecturer and lecturer.department_id == d.id %}selected{% endif %}>{{ d.name_ar }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-gray-300 text-sm mb-2">تاريخ الميلاد</label>
+        <input type="date" name="birth_date"
+          value="{{ lecturer.birth_date.strftime('%Y-%m-%d') if lecturer and lecturer.birth_date else '' }}"
+          class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition">
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Documents -->
+  <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+    <h2 class="text-lg font-bold text-white mb-5">خزينة الوثائق</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+        <p class="text-gray-300 text-sm font-medium mb-3">&#128196; شهادة الميلاد</p>
+        {% if docs_by_type.get('birth_certificate') %}
+        <div class="mb-3 flex items-center gap-2">
+          <span class="text-green-400 text-xs">&#10003; مرفوعة:</span>
+          <a href="{{ url_for('serve_upload', filename=docs_by_type['birth_certificate'].filename) }}"
+             target="_blank" class="text-blue-400 hover:text-blue-300 text-xs transition truncate max-w-48">
+            {{ docs_by_type['birth_certificate'].original_name }}
+          </a>
+        </div>
+        {% else %}
+        <p class="text-gray-600 text-xs mb-3">لم تُرفع بعد</p>
+        {% endif %}
+        <input type="file" name="birth_certificate" accept=".pdf,.jpg,.jpeg,.png"
+          class="w-full text-xs text-gray-400 file:bg-gray-700 file:border-0 file:text-gray-200 file:rounded-lg file:px-3 file:py-1.5 file:ml-3 file:cursor-pointer hover:file:bg-gray-600 transition">
+        <p class="text-gray-600 text-xs mt-1">PDF, JPG, PNG — اختياري</p>
+      </div>
+
+      <div class="bg-gray-800/50 rounded-xl p-4 border border-gray-700">
+        <p class="text-gray-300 text-sm font-medium mb-3">&#127891; المؤهل العلمي</p>
+        {% if docs_by_type.get('qualification') %}
+        <div class="mb-3 flex items-center gap-2">
+          <span class="text-green-400 text-xs">&#10003; مرفوع:</span>
+          <a href="{{ url_for('serve_upload', filename=docs_by_type['qualification'].filename) }}"
+             target="_blank" class="text-blue-400 hover:text-blue-300 text-xs transition truncate max-w-48">
+            {{ docs_by_type['qualification'].original_name }}
+          </a>
+        </div>
+        {% else %}
+        <p class="text-gray-600 text-xs mb-3">لم يُرفع بعد</p>
+        {% endif %}
+        <input type="file" name="qualification" accept=".pdf,.jpg,.jpeg,.png"
+          class="w-full text-xs text-gray-400 file:bg-gray-700 file:border-0 file:text-gray-200 file:rounded-lg file:px-3 file:py-1.5 file:ml-3 file:cursor-pointer hover:file:bg-gray-600 transition">
+        <p class="text-gray-600 text-xs mt-1">PDF, JPG, PNG — اختياري</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Submit -->
+  <div class="flex items-center justify-between">
+    <a href="{{ url_for('admin_lecturers') }}"
+       class="text-gray-400 hover:text-gray-200 text-sm transition">إلغاء</a>
+    <button type="submit"
+      class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold px-10 py-3 rounded-xl transition">
+      {% if lecturer %}حفظ التعديلات{% else %}إضافة المحاضر{% endif %}
+    </button>
+  </div>
+
+</form>
+
+<script>
+document.getElementById('profile_image').addEventListener('change', function (e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function (ev) {
+    const preview = document.getElementById('img-preview');
+    preview.innerHTML = '<img src="' + ev.target.result + '" class="w-full h-full object-cover">';
+  };
+  reader.readAsDataURL(file);
+});
+</script>
+{% endblock %}

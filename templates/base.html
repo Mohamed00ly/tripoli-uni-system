@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}بوابة جامعة طرابلس{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+        crossorigin="anonymous" referrerpolicy="no-referrer">
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; }
+
+    /* Thin scrollbar for sidebar */
+    #sidebar-nav::-webkit-scrollbar { width: 3px; }
+    #sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+    #sidebar-nav::-webkit-scrollbar-thumb { background: #374151; border-radius: 9999px; }
+
+    /* Print: hide sidebar and header, reset content margins */
+    @media print {
+      #sidebar, #topbar, .no-print { display: none !important; }
+      #main-content { margin-right: 0 !important; margin-top: 0 !important; padding: 1rem !important; }
+      body { background: white !important; color: black !important; }
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col">
+
+{# ======================================================
+   Jinja2 macros — defined before conditional blocks so
+   they are always in scope when the sidebar renders.
+   ====================================================== #}
+
+{# Standard nav link — blue active highlight #}
+{% macro navlink(ep, icon, label, extras=[]) %}
+{% set active = request.endpoint == ep or request.endpoint in extras %}
+<a href="{{ url_for(ep) }}"
+   class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors duration-150 group
+          {{ 'bg-blue-600/20 text-white font-medium' if active
+             else 'text-gray-400 hover:text-white hover:bg-gray-800/70' }}">
+  <i class="fa-solid {{ icon }} w-5 text-center text-sm flex-shrink-0
+            {{ 'text-blue-400' if active else 'text-gray-500 group-hover:text-gray-300' }}"></i>
+  <span class="truncate">{{ label }}</span>
+  {% if active %}<span class="mr-auto w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0"></span>{% endif %}
+</a>
+{% endmacro %}
+
+{# Colored nav link (orange / cyan / purple / green) #}
+{% macro navlink_c(ep, icon, label, c) %}
+{% set active = request.endpoint == ep %}
+<a href="{{ url_for(ep) }}"
+   class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors duration-150 group
+          {{ 'bg-' + c + '-900/30 text-' + c + '-200 font-medium'
+             if active
+             else 'text-' + c + '-400 hover:text-' + c + '-300 hover:bg-gray-800/70' }}">
+  <i class="fa-solid {{ icon }} w-5 text-center text-sm flex-shrink-0"></i>
+  <span class="truncate">{{ label }}</span>
+  {% if active %}<span class="mr-auto w-1.5 h-1.5 rounded-full bg-{{ c }}-400 flex-shrink-0"></span>{% endif %}
+</a>
+{% endmacro %}
+
+{# Section divider label #}
+{% macro sec(title) %}
+<div class="px-3 pt-5 pb-1.5">
+  <p class="text-gray-600 text-xs font-semibold uppercase tracking-wider">{{ title }}</p>
+</div>
+{% endmacro %}
+
+
+{% if current_user.is_authenticated %}
+
+<!-- ░░░ MOBILE OVERLAY ░░░ -->
+<div id="sidebar-overlay"
+     class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden md:hidden"
+     onclick="closeSidebar()"></div>
+
+<!-- ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     SIDEBAR — fixed right, RTL layout
+     ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ -->
+<aside id="sidebar"
+       class="fixed top-0 right-0 h-full w-64 z-50 flex flex-col
+              bg-gray-900 border-l border-gray-800
+              transform translate-x-full md:translate-x-0
+              transition-transform duration-300 ease-in-out">
+
+  <!-- ── Logo strip ── -->
+  <div class="h-16 flex items-center gap-3 px-5 border-b border-gray-800 flex-shrink-0">
+    <img src="{{ system_logo_url }}"
+         alt="شعار الجامعة"
+         class="h-9 w-9 object-contain rounded flex-shrink-0"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="w-9 h-9 bg-blue-600 rounded-xl items-center justify-center
+                font-bold text-base flex-shrink-0 hidden" style="display:none">ج</div>
+    <div class="min-w-0">
+      <p class="text-white font-bold text-sm leading-snug truncate">جامعة طرابلس</p>
+      <p class="text-gray-500 text-xs leading-snug">University of Tripoli</p>
+    </div>
+  </div>
+
+  <!-- ── Navigation links ── -->
+  <nav id="sidebar-nav" class="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+
+    {% if current_user.is_admin %}
+
+      {{ navlink('admin_dashboard', 'fa-gauge-high', 'الرئيسية') }}
+
+      {{ sec('المستخدمون') }}
+      {{ navlink('admin_students',    'fa-users',              'الطلاب',           ['edit_student']) }}
+      {{ navlink('admin_lecturers',   'fa-chalkboard-user',    'المحاضرون',         ['add_lecturer','edit_lecturer']) }}
+      {{ navlink('admin_departments', 'fa-building-columns',   'الأقسام') }}
+
+      {{ sec('الأكاديمية') }}
+      {{ navlink('admin_analytics', 'fa-chart-bar',       'التحليلات') }}
+      {{ navlink('assign_lecturer', 'fa-user-check',      'تعيين المحاضرين') }}
+      {{ navlink('pre_register',    'fa-clipboard-list',  'التسجيل المسبق') }}
+
+      {{ sec('الدرجات والتسجيل') }}
+      {{ navlink_c('batch_grades',             'fa-pen-to-square', 'تعديل الدرجات',   'orange') }}
+      {{ navlink_c('admin_enrollment_control', 'fa-sliders',       'التحكم بالتسجيل', 'cyan') }}
+
+      {{ sec('إدارة النظام') }}
+      {{ navlink('admin_branding', 'fa-palette', 'إعدادات الشعار') }}
+      {% if current_user.has_full_access %}
+      {{ navlink_c('admin_staff', 'fa-user-shield', 'إدارة الموظفين', 'purple') }}
+      {% endif %}
+
+      {{ sec('البيانات') }}
+      {{ navlink('admin_import',    'fa-file-arrow-up', 'استيراد CSV/Excel') }}
+      {{ navlink('admin_audit_log', 'fa-scroll',        'سجل العمليات') }}
+      <!-- Export is a direct download, no active state needed -->
+      <a href="{{ url_for('export_excel') }}"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors duration-150
+                text-green-400 hover:text-green-300 hover:bg-gray-800/70">
+        <i class="fa-solid fa-file-excel w-5 text-center text-sm flex-shrink-0"></i>
+        <span class="truncate">تصدير Excel ↓</span>
+      </a>
+
+    {% elif current_user.is_lecturer %}
+
+      {{ navlink('lecturer_dashboard', 'fa-gauge-high', 'لوحة التحكم') }}
+
+    {% else %}
+
+      {{ navlink('dashboard',       'fa-gauge-high',  'لوحتي') }}
+      {{ navlink('enrollment',      'fa-list-check',  'تسجيل المواد') }}
+      {{ navlink('view_transcript', 'fa-file-lines',  'كشف الدرجات') }}
+
+    {% endif %}
+
+  </nav>
+
+  <!-- ── User panel (bottom) ── -->
+  <div class="border-t border-gray-800 p-4 flex-shrink-0">
+    <div class="flex items-center gap-3 mb-3">
+      <!-- Avatar initial -->
+      <div class="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center font-bold text-sm select-none
+                  {% if current_user.is_admin %}bg-purple-900/60 text-purple-300
+                  {% elif current_user.is_lecturer %}bg-yellow-900/60 text-yellow-300
+                  {% else %}bg-blue-900/60 text-blue-300{% endif %}">
+        {{ current_user.full_name[:1] }}
+      </div>
+      <div class="min-w-0 flex-1">
+        <p class="text-white text-xs font-medium truncate leading-snug">{{ current_user.full_name }}</p>
+        <p class="text-gray-500 text-xs truncate leading-snug">{{ current_user.email }}</p>
+      </div>
+    </div>
+    <a href="{{ url_for('logout') }}"
+       class="flex items-center justify-center gap-2 w-full py-2 rounded-xl text-xs font-medium
+              bg-red-600/10 hover:bg-red-600/30 border border-red-900/40 hover:border-red-700
+              text-red-400 hover:text-red-300 transition-colors duration-150">
+      <i class="fa-solid fa-right-from-bracket"></i>
+      تسجيل الخروج
+    </a>
+  </div>
+
+</aside>
+
+
+<!-- ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+     TOP HEADER — spans content area (not sidebar)
+     ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ -->
+<header id="topbar"
+        class="fixed top-0 left-0 right-0 md:right-64 h-16 z-40
+               bg-gray-950/85 backdrop-blur-md border-b border-gray-800/80
+               flex items-center justify-between px-5 gap-4">
+
+  <!-- Hamburger (visible on mobile only) -->
+  <button onclick="toggleSidebar()"
+          class="md:hidden w-9 h-9 flex items-center justify-center rounded-xl
+                 text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+          aria-label="فتح القائمة">
+    <i class="fa-solid fa-bars text-base"></i>
+  </button>
+
+  <!-- Desktop breadcrumb / tagline -->
+  <div class="hidden md:flex items-center gap-2 text-gray-600 text-xs select-none">
+    <span class="w-2 h-2 rounded-full bg-blue-600 inline-block"></span>
+    <span>الفصل الأول — السنة الجامعية 2024</span>
+  </div>
+
+  <!-- Spacer -->
+  <div class="flex-1"></div>
+
+  <!-- User info + role badge -->
+  <div class="flex items-center gap-3 flex-shrink-0">
+    <span class="text-gray-400 text-xs hidden sm:block max-w-28 truncate">
+      {{ current_user.full_name }}
+    </span>
+    <span class="text-xs px-2.5 py-1 rounded-full font-medium
+      {% if current_user.is_admin %}bg-purple-900/60 text-purple-300
+      {% elif current_user.is_lecturer %}bg-yellow-900/60 text-yellow-300
+      {% else %}bg-blue-900/60 text-blue-300{% endif %}">
+      {% if current_user.is_admin %}مدير
+      {% elif current_user.is_lecturer %}محاضر
+      {% else %}طالب{% endif %}
+    </span>
+  </div>
+
+</header>
+
+{% endif %}{# end is_authenticated #}
+
+
+<!-- ░░░░░░░░░░░░░░░░░░░░░░░░░░
+     MAIN CONTENT AREA
+     ░░░░░░░░░░░░░░░░░░░░░░░░░░ -->
+<main id="main-content"
+      class="{{ 'mr-0 md:mr-64 mt-16' if current_user.is_authenticated else '' }}
+             px-4 sm:px-6 py-8 flex-1">
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="mb-6 space-y-2">
+      {% for category, message in messages %}
+      <div class="p-4 rounded-xl border text-sm
+        {% if category == 'error'   %}bg-red-900/30    border-red-700    text-red-200
+        {% elif category == 'success'%}bg-green-900/30  border-green-700  text-green-200
+        {% elif category == 'warning'%}bg-yellow-900/30 border-yellow-700 text-yellow-200
+        {% else                     %}bg-blue-900/30   border-blue-700   text-blue-200{% endif %}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</main>
+
+
+<!-- ░░░ FOOTER ░░░ -->
+<footer class="{{ 'mr-0 md:mr-64' if current_user.is_authenticated else '' }}
+               border-t border-gray-800/60 bg-gray-900/40 py-5 px-4 sm:px-6 flex-shrink-0">
+  <div class="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-500">
+    <p>© 2026 جميع الحقوق محفوظة — بوابة جامعة طرابلس</p>
+    <p>Developed by <span class="text-gray-400 font-medium">Mohamed Barakat</span></p>
+  </div>
+</footer>
+
+
+<!-- ░░░ JS ░░░ -->
+<script>
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+
+  function toggleSidebar() {
+    const isHidden = sidebar.classList.contains('translate-x-full');
+    sidebar.classList.toggle('translate-x-full', !isHidden);
+    sidebar.classList.toggle('translate-x-0',    isHidden);
+    overlay.classList.toggle('hidden',           !isHidden);
+  }
+
+  function closeSidebar() {
+    sidebar.classList.add('translate-x-full');
+    sidebar.classList.remove('translate-x-0');
+    overlay.classList.add('hidden');
+  }
+
+  // Close sidebar on Escape key (accessibility) — guard for unauthenticated pages
+  if (sidebar) {
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeSidebar();
+    });
+  }
+</script>
+
+</body>
+</html>

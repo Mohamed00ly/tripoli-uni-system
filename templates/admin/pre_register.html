@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% block title %}التسجيل المسبق — لوحة الإدارة{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+  <h1 class="text-3xl font-bold text-white">التسجيل المسبق</h1>
+  <p class="text-gray-400 mt-1 text-sm">الطلاب المؤهلون لإنشاء حسابات على البوابة</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+  <!-- Add form -->
+  <div>
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+      <h2 class="text-lg font-bold text-white mb-5">إضافة طالب</h2>
+      <form method="POST" enctype="multipart/form-data" class="space-y-4">
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">رقم القيد <span class="text-red-400">*</span></label>
+          <input type="text" name="student_id" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500
+                   focus:outline-none focus:border-blue-500 transition"
+            placeholder="218006">
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">الاسم الكامل <span class="text-red-400">*</span></label>
+          <input type="text" name="full_name" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500
+                   focus:outline-none focus:border-blue-500 transition"
+            placeholder="الاسم الثلاثي">
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">القسم</label>
+          <select name="department_id"
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white
+                   focus:outline-none focus:border-blue-500 transition">
+            <option value="">— غير محدد —</option>
+            {% for d in departments %}
+            <option value="{{ d.id }}">{{ d.name_ar }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">تاريخ الميلاد</label>
+          <input type="date" name="birth_date"
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white
+                   focus:outline-none focus:border-blue-500 transition">
+        </div>
+
+        <!-- Document uploads -->
+        <div class="border-t border-gray-800 pt-4 space-y-3">
+          <p class="text-gray-400 text-xs font-medium">الوثائق (اختياري)</p>
+
+          <div>
+            <label class="block text-gray-500 text-xs mb-1">&#128196; شهادة الميلاد</label>
+            <input type="file" name="birth_certificate" accept=".pdf,.jpg,.jpeg,.png"
+              class="w-full text-xs text-gray-400 file:bg-gray-700 file:border-0 file:text-gray-200 file:rounded-lg file:px-3 file:py-1.5 file:ml-2 file:cursor-pointer hover:file:bg-gray-600 transition">
+          </div>
+
+          <div>
+            <label class="block text-gray-500 text-xs mb-1">&#127891; المؤهل العلمي</label>
+            <input type="file" name="qualification" accept=".pdf,.jpg,.jpeg,.png"
+              class="w-full text-xs text-gray-400 file:bg-gray-700 file:border-0 file:text-gray-200 file:rounded-lg file:px-3 file:py-1.5 file:ml-2 file:cursor-pointer hover:file:bg-gray-600 transition">
+          </div>
+        </div>
+
+        <button type="submit"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-xl transition">
+          إضافة الطالب
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- List -->
+  <div class="lg:col-span-2">
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-800">
+        <h2 class="text-lg font-bold text-white">المسجلون مسبقاً ({{ students | length }})</h2>
+      </div>
+      <div class="divide-y divide-gray-800">
+        {% for s in students %}
+        <div class="px-6 py-4 flex items-start justify-between gap-4 hover:bg-gray-800/30 transition">
+          <div class="min-w-0">
+            <p class="text-white font-medium">{{ s.full_name }}</p>
+            <div class="flex items-center flex-wrap gap-3 mt-1">
+              <span class="text-gray-500 text-sm font-mono">{{ s.student_id }}</span>
+              {% if s.department %}
+              <span class="text-xs bg-indigo-900/40 text-indigo-300 px-2 py-0.5 rounded">{{ s.department.name_ar }}</span>
+              {% endif %}
+              {% if s.birth_date %}
+              <span class="text-gray-600 text-xs">{{ s.birth_date.strftime('%Y-%m-%d') }}</span>
+              {% endif %}
+            </div>
+            <!-- Documents -->
+            {% set docs = s.documents.all() %}
+            {% if docs %}
+            <div class="flex items-center gap-2 mt-2">
+              {% for doc in docs %}
+              <a href="{{ url_for('serve_upload', filename=doc.filename) }}" target="_blank"
+                 class="text-xs text-blue-400 hover:text-blue-300 transition"
+                 title="{{ doc.original_name }}">
+                {% if doc.document_type == 'birth_certificate' %}&#128196; شهادة ميلاد{% else %}&#127891; مؤهل{% endif %}
+              </a>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          <span class="text-gray-600 text-xs flex-shrink-0">{{ s.created_at.strftime('%Y-%m-%d') }}</span>
+        </div>
+        {% else %}
+        <div class="px-6 py-12 text-center text-gray-500 text-sm">لا يوجد طلاب مسجلون مسبقاً</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

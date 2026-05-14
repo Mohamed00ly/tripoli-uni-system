@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}سجل العمليات — بوابة جامعة طرابلس{% endblock %}
+
+{% block content %}
+<div class="mb-8 flex items-center justify-between">
+  <div>
+    <h1 class="text-3xl font-bold text-white">سجل العمليات</h1>
+    <p class="text-gray-400 mt-1 text-sm">آخر {{ logs | length }} عملية مسجلة — قراءة فقط</p>
+  </div>
+  <div class="flex items-center gap-2 text-xs text-gray-500 bg-gray-900 border border-gray-800 rounded-xl px-4 py-2">
+    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+    سجل غير قابل للتعديل
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="flex flex-wrap gap-4 text-xs text-gray-400 mb-5">
+  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-orange-500"></span>تنبيه تعديل بعد القفل</span>
+  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>عمليات عادية</span>
+  <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-gray-600"></span>دخول/خروج</span>
+</div>
+
+<div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-800 text-gray-400 text-xs">
+          <th class="text-right px-4 py-3 font-medium">#</th>
+          <th class="text-right px-4 py-3 font-medium">المنفذ</th>
+          <th class="text-right px-4 py-3 font-medium">العملية</th>
+          <th class="text-right px-4 py-3 font-medium">الكيان</th>
+          <th class="text-right px-4 py-3 font-medium hidden md:table-cell">القيمة القديمة</th>
+          <th class="text-right px-4 py-3 font-medium hidden md:table-cell">القيمة الجديدة</th>
+          <th class="text-right px-4 py-3 font-medium">التوقيت</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-800">
+        {% for log in logs %}
+        {% set is_alert = '⚠' in log.action %}
+        <tr class="hover:bg-gray-800/40 transition {% if is_alert %}bg-orange-950/20{% endif %}">
+          <td class="px-4 py-3 text-gray-600 text-xs font-mono">{{ log.id }}</td>
+
+          <td class="px-4 py-3">
+            {% if log.actor %}
+            <div>
+              <p class="text-white text-xs font-medium">{{ log.actor.full_name }}</p>
+              <p class="text-gray-500 text-xs">{{ log.actor.student_id }}</p>
+            </div>
+            {% else %}
+            <span class="text-gray-600 text-xs">النظام</span>
+            {% endif %}
+          </td>
+
+          <td class="px-4 py-3">
+            <span class="text-xs {% if is_alert %}text-orange-400 font-bold{% else %}text-gray-200{% endif %}">
+              {{ log.action }}
+            </span>
+          </td>
+
+          <td class="px-4 py-3 text-gray-400 text-xs font-mono">
+            {{ log.entity_type }}{% if log.entity_id %}:{{ log.entity_id }}{% endif %}
+          </td>
+
+          <td class="px-4 py-3 hidden md:table-cell">
+            {% if log.old_value %}
+            <span class="text-xs text-red-400 font-mono bg-red-950/30 px-1.5 py-0.5 rounded">{{ log.old_value[:40] }}</span>
+            {% else %}<span class="text-gray-700 text-xs">—</span>{% endif %}
+          </td>
+
+          <td class="px-4 py-3 hidden md:table-cell">
+            {% if log.new_value %}
+            <span class="text-xs text-green-400 font-mono bg-green-950/30 px-1.5 py-0.5 rounded">{{ log.new_value[:40] }}</span>
+            {% else %}<span class="text-gray-700 text-xs">—</span>{% endif %}
+          </td>
+
+          <td class="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+            {{ log.created_at.strftime('%Y-%m-%d %H:%M') }}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="px-4 py-12 text-center text-gray-600">لا توجد عمليات مسجلة</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

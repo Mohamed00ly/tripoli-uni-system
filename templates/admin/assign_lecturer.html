@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}تعيين المحاضرين — بوابة جامعة طرابلس{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+  <h1 class="text-3xl font-bold text-white">تعيين المحاضرين</h1>
+  <p class="text-gray-400 mt-1 text-sm">ربط المحاضرين بمواد الفصل الدراسي الأول 2024</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+  <!-- Assignment form -->
+  <div>
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
+      <h2 class="text-base font-bold text-white mb-5">تعيين جديد</h2>
+      <form method="POST" class="space-y-4">
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">المحاضر</label>
+          <select name="lecturer_id" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition">
+            <option value="">— اختر محاضراً —</option>
+            {% for l in lecturers %}
+            <option value="{{ l.id }}">{{ l.full_name }}</option>
+            {% endfor %}
+          </select>
+          {% if not lecturers %}
+          <p class="text-yellow-400 text-xs mt-1">لا يوجد محاضرون. قم بترقية طالب من صفحة الطلاب.</p>
+          {% endif %}
+        </div>
+        <div>
+          <label class="block text-gray-300 text-sm mb-2">المادة</label>
+          <select name="course_id" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition">
+            <option value="">— اختر مادة —</option>
+            {% for c in courses %}
+            <option value="{{ c.id }}">{{ c.code }} — {{ c.name_ar }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-xl transition">
+          تعيين المحاضر
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Assignments list -->
+  <div class="lg:col-span-2">
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-800">
+        <h2 class="text-base font-bold text-white">التعيينات الحالية ({{ assignments | length }})</h2>
+      </div>
+      {% if assignments %}
+      <div class="divide-y divide-gray-800">
+        {% for a in assignments %}
+        <div class="px-6 py-4 flex items-center justify-between gap-4">
+          <div>
+            <p class="text-white font-medium text-sm">{{ a.course.name_ar }}</p>
+            <p class="text-gray-500 text-xs font-mono mt-0.5">{{ a.course.code }}</p>
+          </div>
+          <div class="text-center">
+            <span class="text-yellow-400 text-xs font-medium">{{ a.lecturer.full_name }}</span>
+          </div>
+          <span class="text-gray-600 text-xs">F{{ a.semester }}/{{ a.year }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="px-6 py-12 text-center text-gray-600 text-sm">لا توجد تعيينات بعد</div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

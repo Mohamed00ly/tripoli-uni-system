@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% block title %}تسجيل المواد — بوابة جامعة طرابلس{% endblock %}
+
+{% block content %}
+<div class="mb-8">
+  <h1 class="text-3xl font-bold text-white">تسجيل المواد</h1>
+  <p class="text-gray-400 mt-1 text-sm">الفصل الأول — السنة الجامعية 2024</p>
+</div>
+
+<!-- Legend -->
+<div class="flex flex-wrap items-center gap-5 mb-6 text-xs text-gray-400">
+  <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span>متاح للتسجيل</span>
+  <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-green-500 inline-block"></span>مسجل بالفعل</span>
+  <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span>أُسقطت بواسطة الإدارة</span>
+  <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-gray-600 inline-block"></span>محجوب (متطلب سابق)</span>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {% for item in courses_data %}
+  {% set c = item.course %}
+  <div class="bg-gray-900 rounded-2xl border overflow-hidden transition-all
+    {% if item.is_enrolled %}border-green-700
+    {% elif item.is_admin_dropped %}border-orange-800/60
+    {% elif not item.can_enroll %}border-gray-800 opacity-55
+    {% else %}border-gray-800 hover:border-gray-700{% endif %}">
+
+    <div class="p-5">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex-1 min-w-0">
+          <span class="text-xs text-gray-500 font-mono">{{ c.code }}</span>
+          <h3 class="text-white font-bold mt-0.5 leading-snug">{{ c.name_ar }}</h3>
+          <p class="text-gray-500 text-xs mt-0.5">{{ c.name_en }}</p>
+        </div>
+        <span class="mr-3 flex-shrink-0 text-xs px-2 py-1 rounded-lg
+          {% if item.is_enrolled %}bg-green-900/50 text-green-400
+          {% elif item.is_admin_dropped %}bg-orange-900/50 text-orange-400
+          {% elif not item.can_enroll %}bg-gray-800 text-gray-500
+          {% else %}bg-blue-900/50 text-blue-400{% endif %}">
+          {% if item.is_enrolled %}مسجل
+          {% elif item.is_admin_dropped %}أُسقط
+          {% elif not item.can_enroll %}محجوب
+          {% else %}متاح{% endif %}
+        </span>
+      </div>
+
+      <div class="flex gap-4 text-xs text-gray-500 mb-4">
+        <span>{{ c.credits }} ساعات</span>
+        <span>{{ c.department.name_ar }}</span>
+      </div>
+
+      {% if not item.can_enroll and item.reason %}
+      <div class="bg-gray-800/60 rounded-lg p-3 mb-4 text-xs text-yellow-400">
+        &#9888; {{ item.reason }}
+      </div>
+      {% endif %}
+
+      {% if item.is_enrolled %}
+        {% if current_user.financial_status == 'paid' %}
+        <div class="w-full bg-gray-800/60 border border-gray-700 text-gray-500 py-2 rounded-xl text-sm text-center flex items-center justify-center gap-2 cursor-not-allowed select-none"
+             title="لا يمكن إسقاط المادة بعد الدفع">
+          <span>&#128274;</span> مدفوع — لا يمكن الإسقاط
+        </div>
+        {% else %}
+        <form method="POST" action="{{ url_for('unenroll_course', course_id=c.id) }}">
+          <button type="submit"
+            class="w-full bg-red-900/40 hover:bg-red-900/70 border border-red-800 text-red-400 hover:text-red-300 py-2 rounded-xl text-sm transition">
+            إلغاء التسجيل
+          </button>
+        </form>
+        {% endif %}
+      {% elif item.is_admin_dropped %}
+      <div class="w-full bg-orange-900/20 border border-orange-800/50 text-orange-400 py-2 rounded-xl text-xs text-center flex items-center justify-center gap-2 mb-2">
+        &#9888; أُسقطت بواسطة الإدارة
+      </div>
+      {% if item.can_enroll %}
+      <form method="POST" action="{{ url_for('enroll_course', course_id=c.id) }}">
+        <button type="submit"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-sm transition">
+          تسجيل مجدداً
+        </button>
+      </form>
+      {% else %}
+      <button disabled
+        class="w-full bg-gray-800 text-gray-600 py-2 rounded-xl text-sm cursor-not-allowed">
+        غير متاح
+      </button>
+      {% endif %}
+      {% elif item.can_enroll %}
+      <form method="POST" action="{{ url_for('enroll_course', course_id=c.id) }}">
+        <button type="submit"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-sm transition">
+          تسجيل المادة
+        </button>
+      </form>
+      {% else %}
+      <button disabled
+        class="w-full bg-gray-800 text-gray-600 py-2 rounded-xl text-sm cursor-not-allowed">
+        غير متاح
+      </button>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

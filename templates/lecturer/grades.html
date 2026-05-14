@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% block title %}إدخال الدرجات — {{ course.name_ar }}{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <a href="{{ url_for('lecturer_dashboard') }}" class="text-gray-500 hover:text-gray-300 text-sm transition">← العودة للوحة المحاضر</a>
+</div>
+
+<div class="mb-6 flex items-start justify-between gap-4">
+  <div>
+    <h1 class="text-2xl font-bold text-white">{{ course.name_ar }}</h1>
+    <p class="text-gray-400 mt-1 text-sm font-mono">{{ course.code }} — {{ course.department.name_ar }}</p>
+  </div>
+  <div class="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-sm text-center flex-shrink-0">
+    <p class="text-gray-400 text-xs mb-1">معادلة الدرجة النهائية</p>
+    <p class="text-white font-bold">
+      <span class="text-blue-400">{{ cw_weight }}%</span> أعمال +
+      <span class="text-green-400">{{ fw_weight }}%</span> امتحان
+    </p>
+  </div>
+</div>
+
+{% if enrollments %}
+<form method="POST">
+  <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden mb-5">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-gray-800 text-gray-400 text-xs">
+            <th class="text-right px-5 py-4 font-medium">الطالب</th>
+            <th class="text-right px-5 py-4 font-medium">رقم القيد</th>
+            <th class="text-right px-5 py-4 font-medium">
+              أعمال السنة <span class="text-blue-400">({{ cw_weight }}%)</span>
+            </th>
+            <th class="text-right px-5 py-4 font-medium">
+              الامتحان النهائي <span class="text-green-400">({{ fw_weight }}%)</span>
+            </th>
+            <th class="text-right px-5 py-4 font-medium">الدرجة النهائية</th>
+            <th class="text-right px-5 py-4 font-medium">الحالة</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-800">
+          {% for e in enrollments %}
+          <tr class="grade-row hover:bg-gray-800/40 transition" data-cw="{{ cw_weight }}" data-fw="{{ fw_weight }}">
+            <td class="px-5 py-4 text-white font-medium">{{ e.student.full_name }}</td>
+            <td class="px-5 py-4 font-mono text-gray-400 text-xs">{{ e.student.student_id }}</td>
+
+            <td class="px-5 py-4">
+              <input type="number" name="cw_{{ e.id }}"
+                value="{{ e.classwork_grade if e.classwork_grade is not none else '' }}"
+                min="0" max="100" step="0.5"
+                placeholder="0 – 100"
+                data-weight="{{ cw_weight }}"
+                class="cw-input w-24 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm
+                       focus:outline-none focus:border-blue-500 transition">
+            </td>
+
+            <td class="px-5 py-4">
+              <input type="number" name="final_{{ e.id }}"
+                value="{{ e.final_grade if e.final_grade is not none else '' }}"
+                min="0" max="100" step="0.5"
+                placeholder="0 – 100"
+                data-weight="{{ fw_weight }}"
+                class="final-input w-24 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm
+                       focus:outline-none focus:border-green-500 transition">
+            </td>
+
+            <td class="px-5 py-4">
+              <span class="total-display text-xl font-bold text-gray-600">
+                {% if e.grade is not none %}{{ e.grade }}{% else %}—{% endif %}
+              </span>
+            </td>
+
+            <td class="px-5 py-4">
+              <span class="status-badge px-2.5 py-1 rounded-full text-xs font-medium
+                {% if e.grade is not none %}
+                  {% if e.grade >= 50 %}bg-green-900/50 text-green-400{% else %}bg-red-900/50 text-red-400{% endif %}
+                {% else %}bg-gray-800 text-gray-500{% endif %}">
+                {% if e.grade is not none %}{% if e.grade >= 50 %}ناجح{% else %}راسب{% endif %}{% else %}لم تُدخل{% endif %}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="flex items-center justify-between">
+    <p class="text-gray-500 text-xs">الدرجات تُحسب آلياً وتُحفظ في قاعدة البيانات مع سجل التدقيق.</p>
+    <button type="submit"
+      class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-3 rounded-xl transition">
+      حفظ الدرجات
+    </button>
+  </div>
+</form>
+{% else %}
+<div class="bg-gray-900 rounded-2xl border border-gray-800 p-12 text-center text-gray-500">
+  لا يوجد طلاب مسجلون في هذه المادة للفصل الحالي.
+</div>
+{% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  function updateRow(row) {
+    const cwInput    = row.querySelector('.cw-input');
+    const finalInput = row.querySelector('.final-input');
+    const totalEl    = row.querySelector('.total-display');
+    const statusEl   = row.querySelector('.status-badge');
+
+    const cw    = parseFloat(cwInput.value)    || null;
+    const final = parseFloat(finalInput.value) || null;
+    const cwW   = parseInt(cwInput.dataset.weight)    || 40;
+    const fwW   = parseInt(finalInput.dataset.weight) || 60;
+
+    if (cw !== null && final !== null) {
+      const total = ((cw * cwW) + (final * fwW)) / 100;
+      const t     = Math.round(total * 10) / 10;
+      totalEl.textContent = t.toFixed(1);
+      totalEl.className   = 'total-display text-xl font-bold ' + (t >= 50 ? 'text-green-400' : 'text-red-400');
+      if (statusEl) {
+        statusEl.textContent = t >= 50 ? 'ناجح' : 'راسب';
+        statusEl.className   = 'status-badge px-2.5 py-1 rounded-full text-xs font-medium ' +
+          (t >= 50 ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400');
+      }
+    } else {
+      totalEl.textContent = '—';
+      totalEl.className   = 'total-display text-xl font-bold text-gray-600';
+    }
+  }
+
+  document.querySelectorAll('.grade-row').forEach(row => {
+    row.querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => updateRow(row)));
+    updateRow(row);
+  });
+});
+</script>
+{% endblock %}

@@ -1248,7 +1248,7 @@ with app.app_context():
     
 
     # 1. إضافة اسمك لقائمة الطلاب المعتمدين (باستخدام المتغيرات)
-    from models import Student 
+    from models import User , PreRegisteredStudent, Department
     if MY_STUDENT_ID and not Student.query.filter_by(student_id=MY_STUDENT_ID).first():
         authorized_student = Student(full_name=MY_FULL_NAME, student_id=MY_STUDENT_ID)
         db.session.add(authorized_student)

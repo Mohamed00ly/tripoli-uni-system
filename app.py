@@ -1222,12 +1222,28 @@ def admin_branding():
     return render_template('admin/branding.html', settings=settings)
 
 
-# --- هذا الجزء يجب أن يكون خارج أي شرط ليعمل على Render ---
+
+
+
+from werkzeug.security import generate_password_hash # تأكد من وجود هذا الاستيراد في الأعلى
+
 with app.app_context():
     db.create_all()
-    print("Database tables created successfully!")
-
-# --- هذا الجزء يبقى كما هو في نهاية الملف ---
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(debug=False, host='0.0.0.0', port=port)
+    
+    # التحقق من وجود حساب الأدمن
+    from models import User # تأكد من كتابة اسم الموديل الخاص بالمستخدمين بشكل صحيح
+    admin_email = os.environ.get('ADMIN_EMAIL')
+    
+    if not User.query.filter_by(email=admin_email).first():
+        admin_password = os.environ.get('ADMIN_PASSWORD')
+        hashed_pw = generate_password_hash(admin_password)
+        
+        new_admin = User(
+            email=admin_email,
+            password=hashed_pw,
+            full_name="Admin User",
+            is_admin=True # إذا كان لديك حقل يحدد الصلاحيات
+        )
+        db.session.add(new_admin)
+        db.session.commit()
+        print("Admin account created successfully!")

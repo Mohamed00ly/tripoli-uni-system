@@ -1231,40 +1231,49 @@ from werkzeug.security import generate_password_hash # تأكد من وجود ه
 with app.app_context():
     db.create_all()
     
-with app.app_context():
-    db.create_all()
-    
-    # استدعاء البيانات من "خزنة" Render
+    # جلب البيانات من Render
     ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
-    MY_STUDENT_ID = os.environ.get('MY_STUDENT_ID') # سنضيف هذا المتغير في Render
-    MY_FULL_NAME = os.environ.get('MY_FULL_NAME')   # سنضيف هذا المتغير في Render
+    MY_STUDENT_ID = os.environ.get('MY_STUDENT_ID')
+    MY_FULL_NAME = os.environ.get('MY_FULL_NAME')
 
+    # استيراد الموديلات الصحيحة (تأكد من وجودها داخل المجلد)
+    from models import User, PreRegisteredStudent
 
-
-
-
-
-    
-
-    # 1. إضافة اسمك لقائمة الطلاب المعتمدين (باستخدام المتغيرات)
-    from models import User , PreRegisteredStudent, Department
-    if MY_STUDENT_ID and not Student.query.filter_by(student_id=MY_STUDENT_ID).first():
-        authorized_student = Student(full_name=MY_FULL_NAME, student_id=MY_STUDENT_ID)
-        db.session.add(authorized_student)
-        db.session.commit()
-        print(f"Authorized student {MY_FULL_NAME} added successfully!")
-
-    # 2. إنشاء حساب الأدمن (باستخدام المتغيرات)
-    from models import User
-    from werkzeug.security import generate_password_hash
-    if ADMIN_EMAIL and not User.query.filter_by(email=ADMIN_EMAIL).first():
-        new_admin = User(
-            email=ADMIN_EMAIL,
-            password=generate_password_hash(ADMIN_PASSWORD),
-            full_name="System Admin",
-            is_admin=True
+    # 1. إضافة بياناتك لجدول الطلاب المسبق تسجيلهم (Authorized)
+    if MY_STUDENT_ID and not PreRegisteredStudent.query.filter_by(student_id=MY_STUDENT_ID).first():
+        new_pre_student = PreRegisteredStudent(
+            full_name=MY_FULL_NAME, 
+            student_id=MY_STUDENT_ID
         )
-        db.session.add(new_admin)
+        db.session.add(new_pre_student)
         db.session.commit()
-        print("Admin account created successfully!")
+        print(f"Student {MY_FULL_NAME} added to PreRegistered list!")
+
+    # 2. إنشاء حساب الأدمن أو تحديثه
+    if ADMIN_EMAIL:
+        admin_user = User.query.filter_by(email=ADMIN_EMAIL).first()
+        hashed_pw = generate_password_hash(ADMIN_PASSWORD)
+        
+        if not admin_user:
+            new_admin = User(
+                email=ADMIN_EMAIL,
+                password_hash=hashed_pw,
+                full_name="Admin System",
+                student_id="ADMIN_2026", # حقل إجباري
+                role='admin',
+                status='approved'
+            )
+            db.session.add(new_admin)
+            db.session.commit()
+            print("Admin account created successfully!")
+        else:
+            # إذا كان موجوداً، نكتفي بتحديث كلمة المرور
+            admin_user.password_hash = hashed_pw
+            db.session.commit()
+            print("Admin password updated!")
+
+# --- نهاية ملف app.py ---
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(pip install Flask Flask-SQLAlchemy Flask-Login psycopg2-binary Werkzeug python-dotenv openpyxl 2>&1)",
+      "PowerShell(tail -5)",
+      "PowerShell(pip install Flask Flask-SQLAlchemy Flask-Login psycopg2-binary Werkzeug python-dotenv openpyxl; Write-Output \"Exit: $LASTEXITCODE\")",
+      "PowerShell(Get-ChildItem -Recurse -Path \"c:\\\\Users\\\\HP\\\\Desktop\\\\student_managment_system\" -File | Where-Object { $_.Name -ne \"__pycache__\" } | Select-Object FullName | Sort-Object FullName)",
+      "Bash(python -c \"import app; print\\('OK'\\)\")",
+      "PowerShell(New-Item -ItemType Directory -Path \"C:\\\\Users\\\\HP\\\\Desktop\\\\student_managment_system\\\\static\\\\img\" -Force)",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import app; env = app.app.jinja_env; [env.get_template\\(t\\) for t in ['base.html','admin/dashboard.html','student/enrollment.html','admin/staff.html','admin/enrollment_control.html']]; print\\('All templates OK'\\)\")"
+    ]
+  }
+}

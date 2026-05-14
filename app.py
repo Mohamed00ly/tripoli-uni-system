@@ -1222,8 +1222,12 @@ def admin_branding():
     return render_template('admin/branding.html', settings=settings)
 
 
+# --- هذا الجزء يجب أن يكون خارج أي شرط ليعمل على Render ---
+with app.app_context():
+    db.create_all()
+    print("Database tables created successfully!")
+
+# --- هذا الجزء يبقى كما هو في نهاية الملف ---
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-    port = int(os.environ.get('PORT',5000))
+    port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)

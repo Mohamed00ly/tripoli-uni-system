@@ -1,3 +1,4 @@
+import os 
 from functools import wraps
 from flask import (Flask, render_template, redirect, url_for, flash,
                    request, abort, send_file, send_from_directory)
@@ -1230,19 +1231,39 @@ from werkzeug.security import generate_password_hash # تأكد من وجود ه
 with app.app_context():
     db.create_all()
     
-    # التحقق من وجود حساب الأدمن
-    from models import User # تأكد من كتابة اسم الموديل الخاص بالمستخدمين بشكل صحيح
-    admin_email = os.environ.get('ADMIN_EMAIL')
+    with app.app_context():
+    db.create_all()
     
-    if not User.query.filter_by(email=admin_email).first():
-        admin_password = os.environ.get('ADMIN_PASSWORD')
-        hashed_pw = generate_password_hash(admin_password)
-        
+    # استدعاء البيانات من "خزنة" Render
+    ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
+    ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
+    MY_STUDENT_ID = os.environ.get('MY_STUDENT_ID') # سنضيف هذا المتغير في Render
+    MY_FULL_NAME = os.environ.get('MY_FULL_NAME')   # سنضيف هذا المتغير في Render
+
+
+
+
+
+
+    
+
+    # 1. إضافة اسمك لقائمة الطلاب المعتمدين (باستخدام المتغيرات)
+    from models import Student 
+    if MY_STUDENT_ID and not Student.query.filter_by(student_id=MY_STUDENT_ID).first():
+        authorized_student = Student(full_name=MY_FULL_NAME, student_id=MY_STUDENT_ID)
+        db.session.add(authorized_student)
+        db.session.commit()
+        print(f"Authorized student {MY_FULL_NAME} added successfully!")
+
+    # 2. إنشاء حساب الأدمن (باستخدام المتغيرات)
+    from models import User
+    from werkzeug.security import generate_password_hash
+    if ADMIN_EMAIL and not User.query.filter_by(email=ADMIN_EMAIL).first():
         new_admin = User(
-            email=admin_email,
-            password=hashed_pw,
-            full_name="Admin User",
-            is_admin=True # إذا كان لديك حقل يحدد الصلاحيات
+            email=ADMIN_EMAIL,
+            password=generate_password_hash(ADMIN_PASSWORD),
+            full_name="System Admin",
+            is_admin=True
         )
         db.session.add(new_admin)
         db.session.commit()

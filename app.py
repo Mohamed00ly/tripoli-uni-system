@@ -1231,47 +1231,70 @@ from werkzeug.security import generate_password_hash # تأكد من وجود ه
 with app.app_context():
     db.create_all()
     
-    # جلب البيانات من Render
+    # 1. جلب البيانات من Render Environment Variables
     ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
     MY_STUDENT_ID = os.environ.get('MY_STUDENT_ID')
     MY_FULL_NAME = os.environ.get('MY_FULL_NAME')
 
-    # استيراد الموديلات الصحيحة (تأكد من وجودها داخل المجلد)
-    from models import User, PreRegisteredStudent
+    # استيراد الموديلات
+    from models import User, PreRegisteredStudent, Department, Course
 
-    # 1. إضافة بياناتك لجدول الطلاب المسبق تسجيلهم (Authorized)
+    # 2. إضافة اسمك للقائمة المعتمدة
     if MY_STUDENT_ID and not PreRegisteredStudent.query.filter_by(student_id=MY_STUDENT_ID).first():
-        new_pre_student = PreRegisteredStudent(
-            full_name=MY_FULL_NAME, 
-            student_id=MY_STUDENT_ID
-        )
-        db.session.add(new_pre_student)
+        new_pre = PreRegisteredStudent(full_name=MY_FULL_NAME, student_id=MY_STUDENT_ID)
+        db.session.add(new_pre)
         db.session.commit()
-        print(f"Student {MY_FULL_NAME} added to PreRegistered list!")
+        print("Done: Student added to PreRegistered.")
 
-    # 2. إنشاء حساب الأدمن أو تحديثه
+    # 3. إنشاء أو تحديث حساب الأدمن
     if ADMIN_EMAIL:
-        admin_user = User.query.filter_by(email=ADMIN_EMAIL).first()
+        admin = User.query.filter_by(email=ADMIN_EMAIL).first()
         hashed_pw = generate_password_hash(ADMIN_PASSWORD)
-        
-        if not admin_user:
+        if not admin:
             new_admin = User(
                 email=ADMIN_EMAIL,
                 password_hash=hashed_pw,
-                full_name="Admin System",
-                student_id="ADMIN_2026", # حقل إجباري
+                full_name="مدير النظام",
+                student_id="ADMIN_001",
                 role='admin',
                 status='approved'
             )
             db.session.add(new_admin)
             db.session.commit()
-            print("Admin account created successfully!")
+            print("Done: Admin created.")
         else:
-            # إذا كان موجوداً، نكتفي بتحديث كلمة المرور
-            admin_user.password_hash = hashed_pw
+            admin.password_hash = hashed_pw
             db.session.commit()
-            print("Admin password updated!")
+
+    # 4. إضافة الأقسام والمواد (البيانات اللي كانت ناقصة)
+    if not Department.query.first():
+        # إنشاء قسم هندسة الحاسوب
+        cs_dept = Department(name_ar="هندسة الحاسوب", name_en="Computer Engineering")
+        db.session.add(cs_dept)
+        db.session.commit() # نحفظ عشان نأخذ الـ ID بتاعه للمواد
+
+        # إضافة مواد لقسم الحاسوب
+        cs_courses = [
+            Course(name_ar="برمجة 1", code="GS111", credits=3, department_id=cs_dept.id),
+            Course(name_ar="تراكيب بيانات", code="CS212", credits=4, department_id=cs_dept.id),
+            Course(name_ar="قواعد بيانات", code="CS311", credits=3, department_id=cs_dept.id)
+        ]
+        
+        # إنشاء قسم الهندسة الكهربائية
+        ee_dept = Department(name_ar="الهندسة الكهربائية", name_en="Electrical Engineering")
+        db.session.add(ee_dept)
+        db.session.commit()
+
+        # إضافة مواد للكهرباء
+        ee_courses = [
+            Course(name_ar="تحليل دوائر 1", code="EE201", credits=3, department_id=ee_dept.id),
+            Course(name_ar="إلكترونيات 1", code="EE301", credits=4, department_id=ee_dept.id)
+        ]
+
+        db.session.add_all(cs_courses + ee_courses)
+        db.session.commit()
+        print("Done: Departments and Courses added.")
 
 # --- نهاية ملف app.py ---
 if __name__ == '__main__':

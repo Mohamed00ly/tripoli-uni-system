@@ -1226,77 +1226,79 @@ def admin_branding():
 
 
 
-from werkzeug.security import generate_password_hash # تأكد من وجود هذا الاستيراد في الأعلى
+# --- بداية الجزء الجاهز للنسخ واللصق ---
+
+from models import User, PreRegisteredStudent, Department, Course
+from werkzeug.security import generate_password_hash
+import os
 
 with app.app_context():
+    # إنشاء الجداول إذا لم تكن موجودة
     db.create_all()
     
-    # 1. جلب البيانات من Render Environment Variables
+    # جلب البيانات من إعدادات Render
     ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
     MY_STUDENT_ID = os.environ.get('MY_STUDENT_ID')
     MY_FULL_NAME = os.environ.get('MY_FULL_NAME')
 
-    # استيراد الموديلات
-    from models import User, PreRegisteredStudent, Department, Course
+    # 1. إضافة الأقسام والمواد أولاً (الأساس)
+    cs_dept = Department.query.filter_by(name_ar="هندسة الحاسوب").first()
+    if not cs_dept:
+        cs_dept = Department(name_ar="هندسة الحاسوب", name_en="Computer Engineering")
+        db.session.add(cs_dept)
+        db.session.commit() # حفظ لكي نحصل على رقم الـ ID للقسم
+        
+        # إضافة مواد تجريبية مربوطة بالقسم
+        db.session.add_all([
+            Course(name_ar="برمجة 1", code="GS111", credits=3, department_id=cs_dept.id),
+            Course(name_ar="تراكيب بيانات", code="CS212", credits=4, department_id=cs_dept.id),
+            Course(name_ar="قواعد بيانات", code="CS311", credits=3, department_id=cs_dept.id)
+        ])
+        db.session.commit()
+        print("Done: Departments and Courses created.")
 
-    # 2. إضافة اسمك للقائمة المعتمدة
+    # 2. إضافة اسمك للقائمة المعتمدة (للتسجيل الجديد)
     if MY_STUDENT_ID and not PreRegisteredStudent.query.filter_by(student_id=MY_STUDENT_ID).first():
         new_pre = PreRegisteredStudent(full_name=MY_FULL_NAME, student_id=MY_STUDENT_ID)
         db.session.add(new_pre)
         db.session.commit()
-        print("Done: Student added to PreRegistered.")
+        print(f"Done: {MY_FULL_NAME} added to Pre-registration.")
 
-    # 3. إنشاء أو تحديث حساب الأدمن
+    # 3. إنشاء أو تحديث حساب الأدمن وربطه بالقسم
     if ADMIN_EMAIL:
-        admin = User.query.filter_by(email=ADMIN_EMAIL).first()
+        admin_user = User.query.filter_by(email=ADMIN_EMAIL).first()
         hashed_pw = generate_password_hash(ADMIN_PASSWORD)
-        if not admin:
-            new_admin = User(
+        
+        if not admin_user:
+            admin_user = User(
                 email=ADMIN_EMAIL,
                 password_hash=hashed_pw,
                 full_name="مدير النظام",
-                student_id="ADMIN_001",
+                student_id="ADMIN_2026",
                 role='admin',
-                status='approved'
+                status='approved',
+                department_id=cs_dept.id # ربطه بالقسم لكي تظهر المواد
             )
-            db.session.add(new_admin)
-            db.session.commit()
-            print("Done: Admin created.")
+            db.session.add(admin_user)
+            print("Done: Admin account created and linked to Dept.")
         else:
-            admin.password_hash = hashed_pw
-            db.session.commit()
-
-    # 4. إضافة الأقسام والمواد (البيانات اللي كانت ناقصة)
-    if not Department.query.first():
-        # إنشاء قسم هندسة الحاسوب
-        cs_dept = Department(name_ar="هندسة الحاسوب", name_en="Computer Engineering")
-        db.session.add(cs_dept)
-        db.session.commit() # نحفظ عشان نأخذ الـ ID بتاعه للمواد
-
-        # إضافة مواد لقسم الحاسوب
-        cs_courses = [
-            Course(name_ar="برمجة 1", code="GS111", credits=3, department_id=cs_dept.id),
-            Course(name_ar="تراكيب بيانات", code="CS212", credits=4, department_id=cs_dept.id),
-            Course(name_ar="قواعد بيانات", code="CS311", credits=3, department_id=cs_dept.id)
-        ]
+            admin_user.password_hash = hashed_pw
+            admin_user.department_id = cs_dept.id # تحديث الربط بالقسم
         
-        # إنشاء قسم الهندسة الكهربائية
-        ee_dept = Department(name_ar="الهندسة الكهربائية", name_en="Electrical Engineering")
-        db.session.add(ee_dept)
         db.session.commit()
 
-        # إضافة مواد للكهرباء
-        ee_courses = [
-            Course(name_ar="تحليل دوائر 1", code="EE201", credits=3, department_id=ee_dept.id),
-            Course(name_ar="إلكترونيات 1", code="EE301", credits=4, department_id=ee_dept.id)
-        ]
+    # 4. ربط حسابك الشخصي بالقسم (إذا كنت قد سجلت سلفاً)
+    if MY_STUDENT_ID:
+        me = User.query.filter_by(student_id=MY_STUDENT_ID).first()
+        if me and cs_dept:
+            me.department_id = cs_dept.id
+            db.session.commit()
+            print("Done: Your student account linked to Dept.")
 
-        db.session.add_all(cs_courses + ee_courses)
-        db.session.commit()
-        print("Done: Departments and Courses added.")
-
-# --- نهاية ملف app.py ---
+# تشغيل التطبيق (هذا السطر يكون في نهاية الملف تماماً وبدون مسافات في البداية)
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
+
+# --- نهاية الجزء الجاهز ---

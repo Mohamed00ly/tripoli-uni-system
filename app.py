@@ -1226,7 +1226,7 @@ def admin_branding():
 
 
 
-# --- بداية الجزء الجاهز للنسخ واللصق ---
+# --- بداية الجزء الجاهز للنسخ واللصق (نسخة مصححة 100%) ---
 
 from models import User, PreRegisteredStudent, Department, Course
 from werkzeug.security import generate_password_hash
@@ -1242,28 +1242,27 @@ with app.app_context():
     MY_STUDENT_ID = os.environ.get('MY_STUDENT_ID')
     MY_FULL_NAME = os.environ.get('MY_FULL_NAME')
 
-    # 1. إضافة الأقسام والمواد أولاً (الأساس)
+    # 1. إضافة الأقسام والمواد (تم إضافة الأسماء الإنجليزية هنا)
     cs_dept = Department.query.filter_by(name_ar="هندسة الحاسوب").first()
     if not cs_dept:
         cs_dept = Department(name_ar="هندسة الحاسوب", name_en="Computer Engineering")
         db.session.add(cs_dept)
-        db.session.commit() # حفظ لكي نحصل على رقم الـ ID للقسم
+        db.session.commit()
         
-        # إضافة مواد تجريبية مربوطة بالقسم
+        # إضافة مواد تجريبية مع أسماء إنجليزية لتجنب خطأ NotNullViolation
         db.session.add_all([
-            Course(name_ar="برمجة 1", code="GS111", credits=3, department_id=cs_dept.id),
-            Course(name_ar="تراكيب بيانات", code="CS212", credits=4, department_id=cs_dept.id),
-            Course(name_ar="قواعد بيانات", code="CS311", credits=3, department_id=cs_dept.id)
+            Course(name_ar="برمجة 1", name_en="Programming 1", code="GS111", credits=3, department_id=cs_dept.id),
+            Course(name_ar="تراكيب بيانات", name_en="Data Structures", code="CS212", credits=4, department_id=cs_dept.id),
+            Course(name_ar="قواعد بيانات", name_en="Database Systems", code="CS311", credits=3, department_id=cs_dept.id)
         ])
         db.session.commit()
-        print("Done: Departments and Courses created.")
+        print("Done: Departments and Courses created with English names.")
 
-    # 2. إضافة اسمك للقائمة المعتمدة (للتسجيل الجديد)
+    # 2. إضافة اسمك للقائمة المعتمدة
     if MY_STUDENT_ID and not PreRegisteredStudent.query.filter_by(student_id=MY_STUDENT_ID).first():
         new_pre = PreRegisteredStudent(full_name=MY_FULL_NAME, student_id=MY_STUDENT_ID)
         db.session.add(new_pre)
         db.session.commit()
-        print(f"Done: {MY_FULL_NAME} added to Pre-registration.")
 
     # 3. إنشاء أو تحديث حساب الأدمن وربطه بالقسم
     if ADMIN_EMAIL:
@@ -1278,25 +1277,23 @@ with app.app_context():
                 student_id="ADMIN_2026",
                 role='admin',
                 status='approved',
-                department_id=cs_dept.id # ربطه بالقسم لكي تظهر المواد
+                department_id=cs_dept.id
             )
             db.session.add(admin_user)
-            print("Done: Admin account created and linked to Dept.")
         else:
             admin_user.password_hash = hashed_pw
-            admin_user.department_id = cs_dept.id # تحديث الربط بالقسم
+            admin_user.department_id = cs_dept.id
         
         db.session.commit()
 
-    # 4. ربط حسابك الشخصي بالقسم (إذا كنت قد سجلت سلفاً)
+    # 4. ربط حسابك الشخصي بالقسم
     if MY_STUDENT_ID:
         me = User.query.filter_by(student_id=MY_STUDENT_ID).first()
         if me and cs_dept:
             me.department_id = cs_dept.id
             db.session.commit()
-            print("Done: Your student account linked to Dept.")
 
-# تشغيل التطبيق (هذا السطر يكون في نهاية الملف تماماً وبدون مسافات في البداية)
+# تشغيل التطبيق (نهاية الملف)
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)

@@ -109,18 +109,21 @@
       {{ navlink('admin_departments', 'fa-building-columns',   'الأقسام') }}
 
       {{ sec('الأكاديمية') }}
-      {{ navlink('admin_analytics', 'fa-chart-bar',       'التحليلات') }}
-      {{ navlink('assign_lecturer', 'fa-user-check',      'تعيين المحاضرين') }}
-      {{ navlink('pre_register',    'fa-clipboard-list',  'التسجيل المسبق') }}
+      {{ navlink('admin_analytics',  'fa-chart-bar',      'التحليلات') }}
+      {{ navlink('admin_courses',    'fa-book-open',       'المقررات الدراسية',  ['delete_course']) }}
+      {{ navlink('admin_classrooms', 'fa-door-open',       'القاعات والمختبرات', ['delete_classroom']) }}
+      {{ navlink('admin_schedule',   'fa-calendar-days',   'الجدول الدراسي',     ['delete_schedule','timetable_export']) }}
+      {{ navlink('assign_lecturer',  'fa-user-check',      'تعيين المحاضرين') }}
+      {{ navlink('pre_register',     'fa-clipboard-list',  'التسجيل المسبق') }}
 
       {{ sec('الدرجات والتسجيل') }}
       {{ navlink_c('batch_grades',             'fa-pen-to-square', 'تعديل الدرجات',   'orange') }}
       {{ navlink_c('admin_enrollment_control', 'fa-sliders',       'التحكم بالتسجيل', 'cyan') }}
 
       {{ sec('إدارة النظام') }}
-      {{ navlink('admin_branding', 'fa-palette', 'إعدادات الشعار') }}
       {% if current_user.has_full_access %}
-      {{ navlink_c('admin_staff', 'fa-user-shield', 'إدارة الموظفين', 'purple') }}
+      {{ navlink('admin_branding', 'fa-palette',    'إعدادات الشعار') }}
+      {{ navlink_c('admin_staff',  'fa-user-shield','إدارة الموظفين', 'purple') }}
       {% endif %}
 
       {{ sec('البيانات') }}

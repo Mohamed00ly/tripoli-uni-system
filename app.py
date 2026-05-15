@@ -16,7 +16,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from config import Config
 from models import (db, User, PreRegisteredStudent, Department, Course,
                     Enrollment, AuditLog, GradeFormula, CourseAssignment,
-                    ClassSchedule, Document, SystemSettings)
+                    ClassSchedule, Classroom, Document, SystemSettings)
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -1170,7 +1170,7 @@ MAX_LOGO_BYTES = 5 * 1024 * 1024  # 5 MB
 
 @app.route('/admin/branding', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@full_access_required
 def admin_branding():
     settings = SystemSettings.query.first()
 
@@ -1215,7 +1215,8 @@ def admin_branding():
             settings = SystemSettings(logo_path=new_path)
             db.session.add(settings)
 
-        log_action('تحديث شعار النظام', 'system_settings', new_val=new_path)
+        log_action('تحديث شعار النظام [superadmin]', 'system_settings',
+                   entity_id=1, new_val=new_path)
         db.session.commit()
         flash('تم تحديث شعار النظام بنجاح وسيظهر فوراً في جميع الصفحات', 'success')
         return redirect(url_for('admin_branding'))
@@ -1223,6 +1224,332 @@ def admin_branding():
     return render_template('admin/branding.html', settings=settings)
 
 
+# ── Admin — Course Management ─────────────────────────────────────────────────
+
+@app.route('/admin/courses', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_courses():
+    departments = Department.query.order_by(Department.name_ar).all()
+    all_courses = Course.query.order_by(Course.code).all()
+
+    if request.method == 'POST':
+        action    = request.form.get('action')
+        course_id = request.form.get('course_id', type=int)
+        code      = request.form.get('code', '').strip().upper()
+        name_ar   = request.form.get('name_ar', '').strip()
+        name_en   = request.form.get('name_en', '').strip()
+        credits   = request.form.get('credits', 3, type=int)
+        dept_id   = request.form.get('department_id', type=int)
+        prereq_id = request.form.get('prerequisite_id', type=int) or None
+
+        if action == 'add':
+            errors = []
+            if not all([code, name_ar, name_en, dept_id]):
+                errors.append('الرمز والاسمان والقسم حقول مطلوبة')
+            elif Course.query.filter_by(code=code).first():
+                errors.append('رمز المادة مستخدم مسبقاً')
+            if errors:
+                for e in errors: flash(e, 'error')
+            else:
+                c = Course(code=code, name_ar=name_ar, name_en=name_en,
+                           credits=credits, department_id=dept_id,
+                           prerequisite_id=prereq_id)
+                db.session.add(c)
+                log_action('إضافة مادة', 'course', new_val=f'{code}:{name_ar}')
+                db.session.commit()
+                flash(f'تمت إضافة المادة {name_ar}', 'success')
+                return redirect(url_for('admin_courses'))
+
+        elif action == 'edit' and course_id:
+            c   = Course.query.get_or_404(course_id)
+            dup = Course.query.filter_by(code=code).first()
+            if dup and dup.id != course_id:
+                flash('رمز المادة مستخدم من مادة أخرى', 'error')
+            else:
+                old = c.code
+                c.code = code; c.name_ar = name_ar; c.name_en = name_en
+                c.credits = credits; c.department_id = dept_id
+                c.prerequisite_id = prereq_id if prereq_id != course_id else None
+                log_action('تعديل مادة', 'course', course_id, old, code)
+                db.session.commit()
+                flash(f'تم تحديث المادة {name_ar}', 'success')
+                return redirect(url_for('admin_courses'))
+
+    dept_filter = request.args.get('dept', type=int)
+    q = request.args.get('q', '').strip()
+    filtered = all_courses
+    if dept_filter:
+        filtered = [c for c in filtered if c.department_id == dept_filter]
+    if q:
+        ql = q.lower()
+        filtered = [c for c in filtered
+                    if ql in c.code.lower() or ql in c.name_ar or ql in c.name_en.lower()]
+    return render_template('admin/courses.html',
+                           courses=filtered, all_courses=all_courses,
+                           departments=departments, dept_filter=dept_filter, q=q)
+
+
+@app.route('/admin/courses/<int:course_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_course(course_id):
+    c = Course.query.get_or_404(course_id)
+    if c.enrollments.count() > 0:
+        flash(f'لا يمكن حذف {c.name_ar}: يوجد {c.enrollments.count()} طالب مسجل', 'error')
+        return redirect(url_for('admin_courses'))
+    dependents = Course.query.filter_by(prerequisite_id=course_id).all()
+    if dependents:
+        flash(f'لا يمكن حذف {c.name_ar}: مطلب سابق لـ '
+              f'{", ".join(x.name_ar for x in dependents)}', 'error')
+        return redirect(url_for('admin_courses'))
+    name = c.name_ar
+    ClassSchedule.query.filter_by(course_id=course_id).delete()
+    CourseAssignment.query.filter_by(course_id=course_id).delete()
+    log_action('حذف مادة', 'course', course_id, old_val=f'{c.code}:{name}')
+    db.session.delete(c)
+    db.session.commit()
+    flash(f'تم حذف المادة {name}', 'success')
+    return redirect(url_for('admin_courses'))
+
+
+# ── Admin — Classroom Management ─────────────────────────────────────────────
+
+@app.route('/admin/classrooms', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_classrooms():
+    if request.method == 'POST':
+        action    = request.form.get('action')
+        room_id   = request.form.get('room_id', type=int)
+        name      = request.form.get('name', '').strip()
+        capacity  = request.form.get('capacity', 30, type=int)
+        room_type = request.form.get('room_type', 'lecture')
+
+        if action == 'add':
+            if not name:
+                flash('اسم القاعة مطلوب', 'error')
+            elif Classroom.query.filter_by(name=name).first():
+                flash('اسم القاعة مستخدم مسبقاً', 'error')
+            else:
+                r = Classroom(name=name, capacity=capacity, room_type=room_type)
+                db.session.add(r)
+                log_action('إضافة قاعة', 'classroom', new_val=name)
+                db.session.commit()
+                flash(f'تمت إضافة القاعة {name}', 'success')
+                return redirect(url_for('admin_classrooms'))
+
+        elif action == 'edit' and room_id:
+            r   = Classroom.query.get_or_404(room_id)
+            dup = Classroom.query.filter_by(name=name).first()
+            if dup and dup.id != room_id:
+                flash('اسم القاعة مستخدم من قاعة أخرى', 'error')
+            else:
+                old = r.name
+                r.name = name; r.capacity = capacity; r.room_type = room_type
+                log_action('تعديل قاعة', 'classroom', room_id, old, name)
+                db.session.commit()
+                flash(f'تم تحديث القاعة {name}', 'success')
+                return redirect(url_for('admin_classrooms'))
+
+    classrooms = Classroom.query.order_by(Classroom.name).all()
+    return render_template('admin/classrooms.html', classrooms=classrooms)
+
+
+@app.route('/admin/classrooms/<int:room_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_classroom(room_id):
+    r = Classroom.query.get_or_404(room_id)
+    if r.schedules.count() > 0:
+        flash(f'لا يمكن حذف {r.name}: مستخدمة في الجداول', 'error')
+        return redirect(url_for('admin_classrooms'))
+    name = r.name
+    log_action('حذف قاعة', 'classroom', room_id, old_val=name)
+    db.session.delete(r)
+    db.session.commit()
+    flash(f'تم حذف القاعة {name}', 'success')
+    return redirect(url_for('admin_classrooms'))
+
+
+# ── Admin — Class Scheduling ──────────────────────────────────────────────────
+
+DAYS_AR    = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس']
+TIME_SLOTS = ['08:00', '09:00', '10:00', '11:00', '12:00',
+              '13:00', '14:00', '15:00', '16:00', '17:00']
+
+
+def _check_schedule_conflicts(lecturer_id, classroom_id, day, start, end, exclude_id=None):
+    msgs = []
+    base = ClassSchedule.query.filter(
+        ClassSchedule.day_of_week == day,
+        ClassSchedule.start_time < end,
+        ClassSchedule.end_time > start,
+    )
+    if exclude_id:
+        base = base.filter(ClassSchedule.id != exclude_id)
+    if lecturer_id:
+        for s in base.filter(ClassSchedule.lecturer_id == lecturer_id).all():
+            msgs.append(f'تعارض محاضر مع مادة "{s.course.name_ar}" ({s.start_time}–{s.end_time})')
+    if classroom_id:
+        for s in base.filter(ClassSchedule.classroom_id == classroom_id).all():
+            msgs.append(f'تعارض قاعة مع مادة "{s.course.name_ar}" ({s.start_time}–{s.end_time})')
+    return msgs
+
+
+@app.route('/admin/schedule', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def admin_schedule():
+    sem     = request.args.get('semester', '1')
+    yr      = request.args.get('year', 2024, type=int)
+    dept_id = request.args.get('department_id', type=int)
+
+    if request.method == 'POST':
+        p_course_id    = request.form.get('course_id', type=int)
+        p_lecturer_id  = request.form.get('lecturer_id', type=int) or None
+        p_classroom_id = request.form.get('classroom_id', type=int) or None
+        p_day          = request.form.get('day_of_week', '')
+        p_start        = request.form.get('start_time', '')
+        p_end          = request.form.get('end_time', '')
+        p_sem          = request.form.get('semester', '1')
+        p_yr           = request.form.get('year', 2024, type=int)
+
+        errors = []
+        if not all([p_course_id, p_day, p_start, p_end]):
+            errors.append('المادة واليوم والوقت حقول مطلوبة')
+        elif p_start >= p_end:
+            errors.append('وقت البداية يجب أن يكون قبل وقت النهاية')
+        else:
+            errors.extend(_check_schedule_conflicts(
+                p_lecturer_id, p_classroom_id, p_day, p_start, p_end))
+
+        if errors:
+            for e in errors: flash(e, 'error')
+        else:
+            db.session.add(ClassSchedule(
+                course_id=p_course_id, lecturer_id=p_lecturer_id,
+                classroom_id=p_classroom_id, day_of_week=p_day,
+                start_time=p_start, end_time=p_end,
+                semester=p_sem, year=p_yr,
+            ))
+            log_action('إضافة حصة', 'schedule',
+                       new_val=f'{p_day} {p_start}-{p_end}')
+            db.session.commit()
+            flash('تمت إضافة الحصة إلى الجدول', 'success')
+        return redirect(url_for('admin_schedule',
+                                semester=p_sem, year=p_yr, department_id=dept_id))
+
+    q = ClassSchedule.query.filter_by(semester=sem, year=yr)
+    if dept_id:
+        cids = [c.id for c in Course.query.filter_by(department_id=dept_id).all()]
+        q = q.filter(ClassSchedule.course_id.in_(cids))
+    schedules = q.order_by(ClassSchedule.day_of_week, ClassSchedule.start_time).all()
+
+    grid = {day: {slot: [] for slot in TIME_SLOTS} for day in DAYS_AR}
+    for s in schedules:
+        if s.day_of_week in grid:
+            for slot in TIME_SLOTS:
+                if s.start_time <= slot < s.end_time:
+                    grid[s.day_of_week][slot].append(s)
+
+    courses     = Course.query.order_by(Course.code).all()
+    lecturers   = User.query.filter_by(role='lecturer').order_by(User.full_name).all()
+    classrooms  = Classroom.query.order_by(Classroom.name).all()
+    departments = Department.query.order_by(Department.name_ar).all()
+    return render_template('admin/schedule.html',
+        schedules=schedules, grid=grid, time_slots=TIME_SLOTS, days=DAYS_AR,
+        courses=courses, lecturers=lecturers, classrooms=classrooms,
+        departments=departments, sem=sem, yr=yr, dept_id=dept_id)
+
+
+@app.route('/admin/schedule/<int:schedule_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_schedule(schedule_id):
+    s = ClassSchedule.query.get_or_404(schedule_id)
+    sem = s.semester; yr = s.year
+    log_action('حذف حصة', 'schedule', schedule_id,
+               old_val=f'{s.course.name_ar} {s.day_of_week} {s.start_time}')
+    db.session.delete(s)
+    db.session.commit()
+    flash('تم حذف الحصة من الجدول', 'success')
+    return redirect(url_for('admin_schedule', semester=sem, year=yr))
+
+
+@app.route('/admin/schedule/export')
+@login_required
+@admin_required
+def timetable_export():
+    sem     = request.args.get('semester', '1')
+    yr      = request.args.get('year', 2024, type=int)
+    dept_id = request.args.get('department_id', type=int)
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    depts = ([Department.query.get(dept_id)] if dept_id
+             else Department.query.order_by(Department.name_ar).all())
+    hdr_fill = PatternFill('solid', fgColor='1e3a5f')
+    hdr_font = Font(bold=True, color='FFFFFF', size=11)
+
+    for dept in depts:
+        if not dept:
+            continue
+        ws = wb.create_sheet(title=dept.name_ar[:31])
+        ws.cell(1, 1, 'الوقت').fill = hdr_fill
+        ws.cell(1, 1).font = hdr_font
+        for col, day in enumerate(DAYS_AR, 2):
+            cell = ws.cell(1, col, day)
+            cell.fill = hdr_fill; cell.font = hdr_font
+            cell.alignment = Alignment(horizontal='center')
+
+        cids = [c.id for c in Course.query.filter_by(department_id=dept.id).all()]
+        dept_scheds = ClassSchedule.query.filter(
+            ClassSchedule.semester == sem,
+            ClassSchedule.year == yr,
+            ClassSchedule.course_id.in_(cids),
+        ).all()
+
+        grid = {day: {slot: [] for slot in TIME_SLOTS} for day in DAYS_AR}
+        for s in dept_scheds:
+            if s.day_of_week in grid:
+                for slot in TIME_SLOTS:
+                    if s.start_time <= slot < s.end_time:
+                        grid[s.day_of_week][slot].append(s)
+
+        for row, slot in enumerate(TIME_SLOTS, 2):
+            ws.cell(row, 1, slot)
+            for col, day in enumerate(DAYS_AR, 2):
+                entries = grid[day][slot]
+                if entries:
+                    parts = []
+                    for e in entries:
+                        txt = e.course.name_ar
+                        if e.classroom:
+                            txt += f'\n({e.classroom.name})'
+                        if e.lecturer:
+                            txt += f'\n{e.lecturer.full_name}'
+                        parts.append(txt)
+                    cell = ws.cell(row, col, '\n---\n'.join(parts))
+                    cell.alignment = Alignment(wrap_text=True,
+                                               horizontal='center', vertical='top')
+
+        ws.column_dimensions['A'].width = 8
+        for col in range(2, len(DAYS_AR) + 2):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = 28
+        for row in range(1, len(TIME_SLOTS) + 2):
+            ws.row_dimensions[row].height = 55
+
+    if not wb.sheetnames:
+        wb.create_sheet('الجدول')
+    out = io.BytesIO(); wb.save(out); out.seek(0)
+    log_action('تصدير جدول دراسي', 'schedule', new_val=f'{sem}/{yr}')
+    db.session.commit()
+    return send_file(out,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'timetable_{sem}_{yr}.xlsx')
 
 
 

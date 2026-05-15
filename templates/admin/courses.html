@@ -1,0 +1,249 @@
+{% extends 'base.html' %}
+{% block title %}إدارة المقررات — لوحة الإدارة{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between flex-wrap gap-3">
+  <div>
+    <a href="{{ url_for('admin_dashboard') }}" class="text-gray-500 hover:text-gray-300 text-sm transition">← لوحة الإدارة</a>
+    <h1 class="text-3xl font-bold text-white mt-2">إدارة المقررات الدراسية</h1>
+    <p class="text-gray-400 text-sm mt-1">إضافة وتعديل وحذف المقررات وضبط المتطلبات السابقة</p>
+  </div>
+  <span class="text-gray-500 text-sm bg-gray-800 px-3 py-1.5 rounded-xl">
+    {{ courses|length }} مقرر
+  </span>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+  <!-- ── Add / Edit form ── -->
+  <div>
+    <div id="course-form-card" class="bg-gray-900 rounded-2xl border border-blue-800/40 p-6 sticky top-20">
+      <div class="flex items-center gap-3 mb-5">
+        <div class="w-10 h-10 bg-blue-900/50 rounded-xl flex items-center justify-center text-blue-400">
+          <i class="fa-solid fa-book-open text-lg"></i>
+        </div>
+        <div>
+          <h2 id="form-title" class="text-lg font-bold text-white">إضافة مقرر جديد</h2>
+          <p class="text-gray-500 text-xs mt-0.5">أدخل تفاصيل المقرر</p>
+        </div>
+      </div>
+
+      <form id="course-form" method="POST" class="space-y-4">
+        <input type="hidden" name="action" id="form-action" value="add">
+        <input type="hidden" name="course_id" id="form-course-id" value="">
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-1.5">رمز المقرر <span class="text-red-400">*</span></label>
+          <input type="text" name="code" id="f-code" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white
+                   focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition
+                   placeholder-gray-500 uppercase"
+            placeholder="مثال: CS101">
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-1.5">الاسم العربي <span class="text-red-400">*</span></label>
+          <input type="text" name="name_ar" id="f-name-ar" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white
+                   focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition
+                   placeholder-gray-500"
+            placeholder="برمجة 1">
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-1.5">الاسم الإنجليزي <span class="text-red-400">*</span></label>
+          <input type="text" name="name_en" id="f-name-en" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white
+                   focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition
+                   placeholder-gray-500"
+            placeholder="Programming 1">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-300 text-sm mb-1.5">الساعات المعتمدة <span class="text-red-400">*</span></label>
+            <input type="number" name="credits" id="f-credits" min="1" max="6" value="3"
+              class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white
+                     focus:outline-none focus:border-blue-500 transition">
+          </div>
+          <div>
+            <label class="block text-gray-300 text-sm mb-1.5">القسم <span class="text-red-400">*</span></label>
+            <select name="department_id" id="f-dept" required
+              class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white
+                     focus:outline-none focus:border-blue-500 transition">
+              <option value="">— اختر —</option>
+              {% for d in departments %}
+              <option value="{{ d.id }}">{{ d.name_ar }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-gray-300 text-sm mb-1.5">المتطلب السابق</label>
+          <select name="prerequisite_id" id="f-prereq"
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white
+                   focus:outline-none focus:border-blue-500 transition">
+            <option value="">— لا يوجد متطلب —</option>
+            {% for c in all_courses %}
+            <option value="{{ c.id }}" data-self="{{ c.id }}">{{ c.code }} — {{ c.name_ar }}</option>
+            {% endfor %}
+          </select>
+          <p class="text-gray-600 text-xs mt-1">المادة التي يجب اجتيازها قبل التسجيل في هذه المادة</p>
+        </div>
+
+        <div class="flex gap-3 pt-1">
+          <button type="submit"
+            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition text-sm">
+            <i class="fa-solid fa-floppy-disk ml-1"></i>
+            <span id="btn-label">إضافة المقرر</span>
+          </button>
+          <button type="button" id="cancel-btn" onclick="cancelEdit()"
+            class="hidden px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-700
+                   text-gray-400 hover:text-white hover:border-gray-500 transition">
+            إلغاء
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Course list ── -->
+  <div class="lg:col-span-2 space-y-4">
+
+    <!-- Filter bar -->
+    <div class="flex flex-wrap gap-3">
+      <form method="GET" class="flex-1 flex gap-2 min-w-0">
+        <input type="text" name="q" value="{{ q }}"
+          class="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2 text-white text-sm
+                 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition"
+          placeholder="بحث بالرمز أو الاسم…">
+        {% if dept_filter %}
+        <input type="hidden" name="dept" value="{{ dept_filter }}">
+        {% endif %}
+        <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm transition">بحث</button>
+        {% if q %}
+        <a href="{{ url_for('admin_courses', dept=dept_filter) }}"
+           class="px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 transition">✕</a>
+        {% endif %}
+      </form>
+
+      <!-- Department filter pills -->
+      <div class="flex flex-wrap gap-2">
+        <a href="{{ url_for('admin_courses', q=q) }}"
+           class="text-xs px-3 py-1.5 rounded-full border transition
+                  {{ 'bg-blue-600 border-blue-600 text-white' if not dept_filter else 'border-gray-700 text-gray-400 hover:text-white hover:border-gray-500' }}">
+          الكل
+        </a>
+        {% for d in departments %}
+        <a href="{{ url_for('admin_courses', dept=d.id, q=q) }}"
+           class="text-xs px-3 py-1.5 rounded-full border transition
+                  {{ 'bg-indigo-600 border-indigo-600 text-white' if dept_filter == d.id else 'border-gray-700 text-gray-400 hover:text-white hover:border-gray-500' }}">
+          {{ d.name_ar }}
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Table -->
+    {% if courses %}
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-gray-800 text-gray-400 text-xs uppercase tracking-wider">
+            <th class="text-right px-5 py-3">الرمز</th>
+            <th class="text-right px-5 py-3">الاسم العربي</th>
+            <th class="text-right px-3 py-3 hidden md:table-cell">الاسم الإنجليزي</th>
+            <th class="text-center px-3 py-3">س.م</th>
+            <th class="text-right px-3 py-3 hidden sm:table-cell">القسم</th>
+            <th class="text-right px-3 py-3 hidden lg:table-cell">المتطلب</th>
+            <th class="text-center px-3 py-3">إجراءات</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-800">
+          {% for c in courses %}
+          <tr class="hover:bg-gray-800/40 transition">
+            <td class="px-5 py-3">
+              <span class="font-mono text-blue-400 font-semibold text-xs bg-blue-900/20 px-2 py-0.5 rounded">
+                {{ c.code }}
+              </span>
+            </td>
+            <td class="px-5 py-3 text-white font-medium">{{ c.name_ar }}</td>
+            <td class="px-3 py-3 text-gray-400 hidden md:table-cell">{{ c.name_en }}</td>
+            <td class="px-3 py-3 text-center">
+              <span class="text-green-400 font-bold">{{ c.credits }}</span>
+            </td>
+            <td class="px-3 py-3 text-gray-400 text-xs hidden sm:table-cell">
+              {{ c.department.name_ar if c.department else '—' }}
+            </td>
+            <td class="px-3 py-3 text-gray-500 text-xs hidden lg:table-cell">
+              {% if c.prerequisite %}
+              <span class="text-yellow-500">{{ c.prerequisite.code }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="px-3 py-3">
+              <div class="flex items-center justify-center gap-2">
+                <button onclick="startEdit({{ c.id }}, '{{ c.code }}', '{{ c.name_ar|replace("'", "\\'") }}', '{{ c.name_en|replace("'", "\\'") }}', {{ c.credits }}, {{ c.department_id }}, {{ c.prerequisite_id or 'null' }})"
+                  class="text-xs px-2.5 py-1 rounded-lg bg-yellow-900/30 text-yellow-400
+                         hover:bg-yellow-900/60 border border-yellow-900/50 transition">
+                  تعديل
+                </button>
+                <form method="POST" action="{{ url_for('delete_course', course_id=c.id) }}"
+                      onsubmit="return confirm('حذف مادة {{ c.name_ar }}؟ لا يمكن التراجع.')">
+                  <button type="submit"
+                    class="text-xs px-2.5 py-1 rounded-lg bg-red-900/30 text-red-400
+                           hover:bg-red-900/60 border border-red-900/50 transition">
+                    حذف
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 p-16 text-center">
+      <i class="fa-solid fa-book-open text-4xl text-gray-700 mb-4 block"></i>
+      <p class="text-gray-400">لا توجد مقررات مطابقة</p>
+      <p class="text-gray-600 text-sm mt-1">جرب تعديل فلاتر البحث أو أضف مقرراً جديداً</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+function startEdit(id, code, nameAr, nameEn, credits, deptId, prereqId) {
+  document.getElementById('form-action').value    = 'edit';
+  document.getElementById('form-course-id').value = id;
+  document.getElementById('f-code').value         = code;
+  document.getElementById('f-name-ar').value      = nameAr;
+  document.getElementById('f-name-en').value      = nameEn;
+  document.getElementById('f-credits').value      = credits;
+  document.getElementById('f-dept').value         = deptId || '';
+  document.getElementById('f-prereq').value       = prereqId || '';
+  document.getElementById('form-title').textContent  = 'تعديل المقرر';
+  document.getElementById('btn-label').textContent   = 'حفظ التعديلات';
+  document.getElementById('cancel-btn').classList.remove('hidden');
+
+  // Disable the self-option in prerequisite to prevent circular reference
+  document.querySelectorAll('#f-prereq option').forEach(opt => {
+    opt.disabled = (opt.dataset.self && parseInt(opt.dataset.self) === id);
+  });
+
+  document.getElementById('course-form-card').scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+
+function cancelEdit() {
+  document.getElementById('form-action').value    = 'add';
+  document.getElementById('form-course-id').value = '';
+  document.getElementById('course-form').reset();
+  document.getElementById('form-title').textContent = 'إضافة مقرر جديد';
+  document.getElementById('btn-label').textContent  = 'إضافة المقرر';
+  document.getElementById('cancel-btn').classList.add('hidden');
+  document.querySelectorAll('#f-prereq option').forEach(opt => { opt.disabled = false; });
+}
+</script>
+{% endblock %}

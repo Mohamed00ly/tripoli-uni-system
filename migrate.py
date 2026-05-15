@@ -14,6 +14,9 @@ def migrate():
             for sql in [
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_permissions VARCHAR(50)",
                 "ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS dropped_by_admin BOOLEAN DEFAULT FALSE",
+                # Phase 5 — scheduling
+                "ALTER TABLE class_schedules ADD COLUMN IF NOT EXISTS lecturer_id INTEGER REFERENCES users(id)",
+                "ALTER TABLE class_schedules ADD COLUMN IF NOT EXISTS classroom_id INTEGER REFERENCES classrooms(id)",
             ]:
                 try:
                     conn.execute(db.text(sql))

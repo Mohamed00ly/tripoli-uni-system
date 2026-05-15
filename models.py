@@ -97,16 +97,31 @@ class GradeFormula(db.Model):
     final_weight = db.Column(db.Integer, default=60)
 
 
+class Classroom(db.Model):
+    __tablename__ = 'classrooms'
+    id        = db.Column(db.Integer, primary_key=True)
+    name      = db.Column(db.String(100), nullable=False, unique=True)
+    capacity  = db.Column(db.Integer, default=30)
+    room_type = db.Column(db.String(30), default='lecture')  # lecture | lab | seminar
+    schedules = db.relationship('ClassSchedule', backref='classroom', lazy='dynamic',
+                                foreign_keys='ClassSchedule.classroom_id')
+
+
 class ClassSchedule(db.Model):
     __tablename__ = 'class_schedules'
-    id = db.Column(db.Integer, primary_key=True)
-    course_id = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=False)
-    day_of_week = db.Column(db.String(20), nullable=False)
-    start_time = db.Column(db.String(10), nullable=False)
-    end_time = db.Column(db.String(10), nullable=False)
-    room = db.Column(db.String(50))
-    semester = db.Column(db.String(10))
-    year = db.Column(db.Integer)
+    id           = db.Column(db.Integer, primary_key=True)
+    course_id    = db.Column(db.Integer, db.ForeignKey('courses.id'), nullable=False)
+    lecturer_id  = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    classroom_id = db.Column(db.Integer, db.ForeignKey('classrooms.id'), nullable=True)
+    day_of_week  = db.Column(db.String(20), nullable=False)
+    start_time   = db.Column(db.String(10), nullable=False)
+    end_time     = db.Column(db.String(10), nullable=False)
+    room         = db.Column(db.String(50))   # legacy free-text fallback
+    semester     = db.Column(db.String(10))
+    year         = db.Column(db.Integer)
+
+    lecturer = db.relationship('User', backref='teaching_slots',
+                               foreign_keys='ClassSchedule.lecturer_id')
 
 
 class CourseAssignment(db.Model):

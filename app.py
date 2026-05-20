@@ -517,14 +517,26 @@ def delete_student(user_id):
         flash('لا يمكن حذف مدير النظام', 'error')
         return redirect(url_for('admin_students'))
     name = student.full_name
+    sid  = student.student_id
+
+    # Cascade: nullify audit refs, wipe all relational data
     AuditLog.query.filter_by(user_id=user_id).update({'user_id': None})
     Enrollment.query.filter_by(user_id=user_id).delete()
     Document.query.filter_by(user_id=user_id).delete()
     CourseAssignment.query.filter_by(lecturer_id=user_id).delete()
-    log_action('حذف مستخدم', 'user', user_id, old_val=name)
+    ClassSchedule.query.filter_by(lecturer_id=user_id).update({'lecturer_id': None})
+
+    # Revoke re-registration ability: delete the pre-reg record so the admin
+    # must explicitly re-add them before they can create a new account.
+    pre_reg = PreRegisteredStudent.query.filter_by(student_id=sid).first()
+    if pre_reg:
+        Document.query.filter_by(pre_reg_id=pre_reg.id).delete()
+        db.session.delete(pre_reg)
+
+    log_action('حذف طالب (نهائي)', 'user', user_id, old_val=f'{sid}:{name}')
     db.session.delete(student)
     db.session.commit()
-    flash(f'تم حذف {name}', 'success')
+    flash(f'تم حذف {name} نهائياً وإلغاء تصريح إعادة التسجيل.', 'success')
     return redirect(url_for('admin_students'))
 
 
@@ -694,13 +706,19 @@ def edit_lecturer(user_id):
 def delete_lecturer(user_id):
     lecturer = User.query.filter_by(id=user_id, role='lecturer').first_or_404()
     name = lecturer.full_name
+
+    # Cascade: nullify audit refs, wipe all relational data
     AuditLog.query.filter_by(user_id=user_id).update({'user_id': None})
     Document.query.filter_by(user_id=user_id).delete()
     CourseAssignment.query.filter_by(lecturer_id=user_id).delete()
-    log_action('حذف محاضر', 'user', user_id, old_val=name)
+    # NULL the lecturer_id on schedule slots — keeps the timetable intact but
+    # removes the FK reference that would otherwise block deletion.
+    ClassSchedule.query.filter_by(lecturer_id=user_id).update({'lecturer_id': None})
+
+    log_action('حذف محاضر (نهائي)', 'user', user_id, old_val=name)
     db.session.delete(lecturer)
     db.session.commit()
-    flash(f'تم حذف المحاضر {name}', 'success')
+    flash(f'تم حذف المحاضر {name} نهائياً وتحرير جميع ارتباطاته.', 'success')
     return redirect(url_for('admin_lecturers'))
 
 
@@ -1473,7 +1491,10 @@ def admin_schedule():
     if dept_id:
         cids = [c.id for c in Course.query.filter_by(department_id=dept_id).all()]
         q = q.filter(ClassSchedule.course_id.in_(cids))
-    schedules = q.order_by(ClassSchedule.day_of_week, ClassSchedule.start_time).all()
+    schedules_raw = q.order_by(ClassSchedule.day_of_week, ClassSchedule.start_time).all()
+    # Drop orphaned rows (course deleted after schedule was created)
+    schedules = [s for s in schedules_raw
+                 if s.course is not None and s.start_time and s.end_time]
 
     grid = {day: {slot: [] for slot in TIME_SLOTS} for day in DAYS_AR}
     for s in schedules:
@@ -1498,8 +1519,9 @@ def admin_schedule():
 def delete_schedule(schedule_id):
     s = ClassSchedule.query.get_or_404(schedule_id)
     sem = s.semester; yr = s.year
+    course_name = s.course.name_ar if s.course else '(مادة محذوفة)'
     log_action('حذف حصة', 'schedule', schedule_id,
-               old_val=f'{s.course.name_ar} {s.day_of_week} {s.start_time}')
+               old_val=f'{course_name} {s.day_of_week} {s.start_time}')
     db.session.delete(s)
     db.session.commit()
     flash('تم حذف الحصة من الجدول', 'success')
@@ -1589,65 +1611,159 @@ from werkzeug.security import generate_password_hash
 import os
 
 with app.app_context():
-    # إنشاء الجداول إذا لم تكن موجودة
     db.create_all()
-    
-    # جلب البيانات من إعدادات Render
-    ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
+
+    ADMIN_EMAIL    = os.environ.get('ADMIN_EMAIL')
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
-    MY_STUDENT_ID = os.environ.get('MY_STUDENT_ID')
-    MY_FULL_NAME = os.environ.get('MY_FULL_NAME')
+    MY_STUDENT_ID  = os.environ.get('MY_STUDENT_ID')
+    MY_FULL_NAME   = os.environ.get('MY_FULL_NAME')
 
-    # 1. إضافة الأقسام والمواد (تم إضافة الأسماء الإنجليزية هنا)
-    cs_dept = Department.query.filter_by(name_ar="هندسة الحاسوب").first()
-    if not cs_dept:
-        cs_dept = Department(name_ar="هندسة الحاسوب", name_en="Computer Engineering")
-        db.session.add(cs_dept)
-        db.session.commit()
-        
-        # إضافة مواد تجريبية مع أسماء إنجليزية لتجنب خطأ NotNullViolation
-        db.session.add_all([
-            Course(name_ar="برمجة 1", name_en="Programming 1", code="GS111", credits=3, department_id=cs_dept.id),
-            Course(name_ar="تراكيب بيانات", name_en="Data Structures", code="CS212", credits=4, department_id=cs_dept.id),
-            Course(name_ar="قواعد بيانات", name_en="Database Systems", code="CS311", credits=3, department_id=cs_dept.id)
-        ])
-        db.session.commit()
-        print("Done: Departments and Courses created with English names.")
+    # ═══════════════════════════════════════════════════════════════
+    #  SEED — 7 Departments × 10 Courses  (idempotent upsert)
+    # ═══════════════════════════════════════════════════════════════
+    SEED = [
+        {
+            'name_ar': 'القانون', 'name_en': 'Law',
+            'courses': [
+                ('LAW101', 'المدخل لدراسة القانون',                  'Introduction to Law',                3),
+                ('LAW102', 'القانون الدستوري',                        'Constitutional Law',                 3),
+                ('LAW103', 'القانون الدولي العام',                    'Public International Law',           3),
+                ('LAW104', 'مصادر الالتزام',                          'Sources of Obligation',              4),
+                ('LAW105', 'أحكام الالتزام',                          'Rules of Obligation',                4),
+                ('LAW106', 'القانون الجنائي العام',                   'General Criminal Law',               3),
+                ('LAW107', 'القانون الجنائي الخاص',                   'Special Criminal Law',               3),
+                ('LAW108', 'الشريعة الإسلامية: أحكام الأسرة',         'Islamic Sharia: Family Law',         3),
+                ('LAW109', 'الشريعة الإسلامية: المواريث',             'Islamic Sharia: Inheritance Law',    3),
+                ('LAW110', 'القانون الإداري',                         'Administrative Law',                 3),
+            ],
+        },
+        {
+            'name_ar': 'تصميم داخلي', 'name_en': 'Interior Design',
+            'courses': [
+                ('INT101', 'أساسيات التصميم الداخلي',                 'Interior Design Fundamentals',       3),
+                ('INT102', 'الرسم الهندسي والمعماري',                  'Technical and Architectural Drawing',4),
+                ('INT103', 'نظرية الألوان وتطبيقاتها',                 'Color Theory and Applications',      3),
+                ('INT104', 'تاريخ العمارة والتصميم الداخلي 1',         'History of Architecture & Design 1', 3),
+                ('INT105', 'تاريخ العمارة والتصميم الداخلي 2',         'History of Architecture & Design 2', 3),
+                ('INT106', 'المنظور والظلال',                          'Perspective and Shadows',            4),
+                ('INT107', 'خامات ومواد التصميم الداخلي',              'Interior Design Materials',          3),
+                ('INT108', 'التصميم بمساعدة الحاسوب 2D',               'AutoCAD 2D',                         3),
+                ('INT109', 'التصميم ثلاثي الأبعاد 3D Max',             'Computer 3D Modeling',               4),
+                ('INT110', 'تكنولوجيا الإضاءة والصوتيات',              'Lighting and Acoustics Technology',  3),
+            ],
+        },
+        {
+            'name_ar': 'الهندسة', 'name_en': 'Engineering',
+            'courses': [
+                ('ENG101', 'رياضيات هندسية 1',                        'Engineering Mathematics 1',          3),
+                ('ENG102', 'رياضيات هندسية 2',                        'Engineering Mathematics 2',          3),
+                ('ENG103', 'فيزياء عامة وتطبيقية',                    'General and Applied Physics',        3),
+                ('ENG104', 'كيمياء هندسية',                           'Engineering Chemistry',              3),
+                ('ENG105', 'الرسم الهندسي بالحاسوب',                  'Computer Aided Engineering Drawing', 3),
+                ('ENG106', 'ميكانيكا هندسية: استاتيكا',               'Engineering Mechanics: Statics',     3),
+                ('ENG107', 'ميكانيكا هندسية: ديناميكا',               'Engineering Mechanics: Dynamics',    3),
+                ('ENG108', 'مقدمة في البرمجة للهندسة',                'Introduction to Engineering Programming', 3),
+                ('ENG109', 'مقاومة المواد الهندسية',                  'Strength of Engineering Materials',  3),
+                ('ENG110', 'ميكانيكا الموائع',                        'Fluid Mechanics',                    3),
+            ],
+        },
+        {
+            'name_ar': 'المحاسبة', 'name_en': 'Accounting',
+            'courses': [
+                ('ACC101', 'مبادئ المحاسبة المالية 1',                'Principles of Financial Accounting 1', 3),
+                ('ACC102', 'مبادئ المحاسبة المالية 2',                'Principles of Financial Accounting 2', 3),
+                ('ACC103', 'المحاسبة في الشركات الشريكة',             'Accounting for Partnerships',          3),
+                ('ACC104', 'المحاسبة في الشركات المساهمة',            'Accounting for Corporations',          3),
+                ('ACC105', 'محاسبة التكاليف 1',                       'Cost Accounting 1',                    3),
+                ('ACC106', 'محاسبة التكاليف 2',                       'Cost Accounting 2',                    3),
+                ('ACC107', 'المحاسبة الإدارية',                       'Managerial Accounting',                3),
+                ('ACC108', 'المحاسبة الحكومية والمنظمات غير الربحية', 'Governmental & Non-Profit Accounting', 3),
+                ('ACC109', 'المحاسبة الضريبية والزكاة',               'Tax and Zakat Accounting',             3),
+                ('ACC110', 'النظم المحاسبية الإلكترونية',             'Electronic Accounting Systems',        3),
+            ],
+        },
+        {
+            'name_ar': 'إدارة أعمال', 'name_en': 'Business Administration',
+            'courses': [
+                ('BUS101', 'مبادئ إدارة الأعمال 1',                   'Principles of Business Administration 1', 3),
+                ('BUS102', 'مبادئ إدارة الأعمال 2',                   'Principles of Business Administration 2', 3),
+                ('BUS103', 'إدارة الموارد البشرية',                   'Human Resource Management',               3),
+                ('BUS104', 'السلوك التنظيمي في المؤسسات',             'Organizational Behavior',                 3),
+                ('BUS105', 'إدارة التسويق الرقمي والتقليدي',          'Marketing Management',                    3),
+                ('BUS106', 'الإدارة المالية والتمويل',                'Financial Management and Finance',        3),
+                ('BUS107', 'إدارة الإنتاج والعمليات',                 'Production and Operations Management',    3),
+                ('BUS108', 'إدارة المشاريع الصغيرة وريادة الأعمال',   'Small Business & Entrepreneurship',       3),
+                ('BUS109', 'التخطيط والإدارة الإستراتيجية',           'Strategic Planning & Management',         3),
+                ('BUS110', 'نظم المعلومات الإدارية MIS',              'Management Information Systems',          3),
+            ],
+        },
+        {
+            'name_ar': 'اللغات', 'name_en': 'Languages',
+            'courses': [
+                ('LNG101', 'مهارات القراءة والاستيعاب',               'Reading and Comprehension Skills',   3),
+                ('LNG102', 'قواعد اللغة الأساسية 1',                  'Basic Language Grammar 1',           3),
+                ('LNG103', 'قواعد اللغة المتقدمة 2',                  'Advanced Language Grammar 2',        3),
+                ('LNG104', 'مهارات الكتابة والتعبير الأكاديمي',       'Academic Writing and Essay Skills',  3),
+                ('LNG105', 'مهارات الاستماع والمحادثة',               'Listening and Speaking Skills',      3),
+                ('LNG106', 'علم الصوتيات والفونيتكس',                 'Phonetics and Phonology',            3),
+                ('LNG107', 'مقدمة في علم اللغويات',                   'Introduction to Linguistics',        3),
+                ('LNG108', 'علم بناء الجملة والتركيب',                'Syntax and Sentence Structure',      3),
+                ('LNG109', 'علم دلالات الألفاظ والمعاني',             'Semantics and Pragmatics',           3),
+                ('LNG110', 'مبادئ الترجمة العامة',                    'Principles of General Translation',  3),
+            ],
+        },
+        {
+            'name_ar': 'الطب', 'name_en': 'Medicine',
+            'courses': [
+                ('MED101', 'علم التشريح البشري 1',                    'Human Anatomy 1',                    4),
+                ('MED102', 'علم التشريح البشري 2',                    'Human Anatomy 2',                    4),
+                ('MED103', 'علم وظائف الأعضاء الفسيولوجي 1',          'Medical Physiology 1',               4),
+                ('MED104', 'علم وظائف الأعضاء الفسيولوجي 2',          'Medical Physiology 2',               4),
+                ('MED105', 'الكيمياء الحيوية الطبية 1',               'Medical Biochemistry 1',             3),
+                ('MED106', 'الكيمياء الحيوية الطبية والوراثية 2',     'Medical Biochemistry & Genetics 2',  3),
+                ('MED107', 'علم الأنسجة والخلايا الهستولوجي',         'Histology and Cytology',             3),
+                ('MED108', 'علم الأجنة والنمو الطبيعي',               'Embryology and Human Development',   3),
+                ('MED109', 'علم الأمراض الباثولوجي العام 1',          'General Pathology 1',                4),
+                ('MED110', 'علم الأمراض الخاص والجهازي 2',            'Systemic Pathology 2',               4),
+            ],
+        },
+    ]
 
-    # 2. إضافة اسمك للقائمة المعتمدة
+    for dept_data in SEED:
+        dept = Department.query.filter_by(name_ar=dept_data['name_ar']).first()
+        if not dept:
+            dept = Department(name_ar=dept_data['name_ar'], name_en=dept_data['name_en'])
+            db.session.add(dept)
+            db.session.flush()          # get dept.id before inserting courses
+        for code, name_ar, name_en, credits in dept_data['courses']:
+            if not Course.query.filter_by(code=code).first():
+                db.session.add(Course(
+                    code=code, name_ar=name_ar, name_en=name_en,
+                    credits=credits, department_id=dept.id,
+                ))
+    db.session.commit()
+    print('✓ Seed: 7 departments / 70 courses verified.')
+
+    # ── Personal pre-reg entry (from Render env) ──────────────────
     if MY_STUDENT_ID and not PreRegisteredStudent.query.filter_by(student_id=MY_STUDENT_ID).first():
-        new_pre = PreRegisteredStudent(full_name=MY_FULL_NAME, student_id=MY_STUDENT_ID)
-        db.session.add(new_pre)
+        db.session.add(PreRegisteredStudent(full_name=MY_FULL_NAME or MY_STUDENT_ID,
+                                            student_id=MY_STUDENT_ID))
         db.session.commit()
 
-    # 3. إنشاء أو تحديث حساب الأدمن وربطه بالقسم
+    # ── Admin account (from Render env) ───────────────────────────
     if ADMIN_EMAIL:
         admin_user = User.query.filter_by(email=ADMIN_EMAIL).first()
-        hashed_pw = generate_password_hash(ADMIN_PASSWORD)
-        
+        hashed_pw  = generate_password_hash(ADMIN_PASSWORD or 'ChangeMe123!')
         if not admin_user:
             admin_user = User(
-                email=ADMIN_EMAIL,
-                password_hash=hashed_pw,
-                full_name="مدير النظام",
-                student_id="ADMIN_2026",
-                role='admin',
-                status='approved',
-                department_id=cs_dept.id
+                email=ADMIN_EMAIL, password_hash=hashed_pw,
+                full_name='مدير النظام', student_id='ADMIN_2026',
+                role='admin', status='approved',
             )
             db.session.add(admin_user)
         else:
             admin_user.password_hash = hashed_pw
-            admin_user.department_id = cs_dept.id
-        
         db.session.commit()
-
-    # 4. ربط حسابك الشخصي بالقسم
-    if MY_STUDENT_ID:
-        me = User.query.filter_by(student_id=MY_STUDENT_ID).first()
-        if me and cs_dept:
-            me.department_id = cs_dept.id
-            db.session.commit()
 
 # تشغيل التطبيق (نهاية الملف)
 if __name__ == '__main__':

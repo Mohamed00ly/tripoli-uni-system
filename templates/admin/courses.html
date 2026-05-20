@@ -86,10 +86,12 @@
                    focus:outline-none focus:border-blue-500 transition">
             <option value="">— لا يوجد متطلب —</option>
             {% for c in all_courses %}
-            <option value="{{ c.id }}" data-self="{{ c.id }}">{{ c.code }} — {{ c.name_ar }}</option>
+            <option value="{{ c.id }}"
+                    data-self="{{ c.id }}"
+                    data-dept="{{ c.department_id }}">{{ c.code }} — {{ c.name_ar }}</option>
             {% endfor %}
           </select>
-          <p class="text-gray-600 text-xs mt-1">المادة التي يجب اجتيازها قبل التسجيل في هذه المادة</p>
+          <p id="prereq-hint" class="text-gray-600 text-xs mt-1">اختر القسم أولاً لتصفية المتطلبات</p>
         </div>
 
         <div class="flex gap-3 pt-1">
@@ -215,6 +217,40 @@
 </div>
 
 <script>
+// ── Prerequisite department filter ──────────────────────────────────────────
+function filterPrereqs(deptId, keepValue) {
+  const sel    = document.getElementById('f-prereq');
+  const hint   = document.getElementById('prereq-hint');
+  const deptStr = String(deptId || '');
+
+  sel.querySelectorAll('option[data-dept]').forEach(opt => {
+    const match    = deptStr && opt.dataset.dept === deptStr;
+    opt.hidden     = !match;
+    opt.disabled   = !match;
+  });
+
+  // If the currently selected value is now hidden, fall back to "no prereq"
+  const picked = sel.querySelector(`option[value="${sel.value}"]`);
+  if (!keepValue || !sel.value || (picked && picked.hidden)) {
+    sel.value = '';
+  }
+
+  // Update hint text
+  if (!deptStr) {
+    hint.textContent = 'اختر القسم أولاً لتصفية المتطلبات';
+    hint.className   = 'text-gray-600 text-xs mt-1';
+  } else {
+    const count = sel.querySelectorAll(`option[data-dept="${deptStr}"]`).length;
+    hint.textContent = count
+      ? `${count} مادة متاحة كمتطلب سابق`
+      : 'لا توجد مواد سابقة في هذا القسم';
+    hint.className = count
+      ? 'text-blue-500 text-xs mt-1'
+      : 'text-gray-500 text-xs mt-1';
+  }
+}
+
+// ── Edit / Cancel ────────────────────────────────────────────────────────────
 function startEdit(id, code, nameAr, nameEn, credits, deptId, prereqId) {
   document.getElementById('form-action').value    = 'edit';
   document.getElementById('form-course-id').value = id;
@@ -223,14 +259,20 @@ function startEdit(id, code, nameAr, nameEn, credits, deptId, prereqId) {
   document.getElementById('f-name-en').value      = nameEn;
   document.getElementById('f-credits').value      = credits;
   document.getElementById('f-dept').value         = deptId || '';
-  document.getElementById('f-prereq').value       = prereqId || '';
-  document.getElementById('form-title').textContent  = 'تعديل المقرر';
-  document.getElementById('btn-label').textContent   = 'حفظ التعديلات';
+  document.getElementById('form-title').textContent = 'تعديل المقرر';
+  document.getElementById('btn-label').textContent  = 'حفظ التعديلات';
   document.getElementById('cancel-btn').classList.remove('hidden');
 
-  // Disable the self-option in prerequisite to prevent circular reference
+  // Filter prereqs to the course's department, then restore the saved prereq
+  filterPrereqs(deptId, /* keepValue */ true);
+  document.getElementById('f-prereq').value = prereqId || '';
+
+  // Disable the self-option to prevent circular reference
   document.querySelectorAll('#f-prereq option').forEach(opt => {
-    opt.disabled = (opt.dataset.self && parseInt(opt.dataset.self) === id);
+    if (opt.dataset.self && parseInt(opt.dataset.self) === id) {
+      opt.disabled = true;
+      opt.hidden   = true;
+    }
   });
 
   document.getElementById('course-form-card').scrollIntoView({behavior: 'smooth', block: 'start'});
@@ -243,7 +285,15 @@ function cancelEdit() {
   document.getElementById('form-title').textContent = 'إضافة مقرر جديد';
   document.getElementById('btn-label').textContent  = 'إضافة المقرر';
   document.getElementById('cancel-btn').classList.add('hidden');
-  document.querySelectorAll('#f-prereq option').forEach(opt => { opt.disabled = false; });
+  filterPrereqs('');
 }
+
+// ── Wire up department change + initialize on load ───────────────────────────
+document.getElementById('f-dept').addEventListener('change', function () {
+  filterPrereqs(this.value);
+});
+
+// On page load: filter to match whatever dept is already selected (e.g. after form error)
+filterPrereqs(document.getElementById('f-dept').value);
 </script>
 {% endblock %}

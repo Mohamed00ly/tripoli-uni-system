@@ -1611,6 +1611,10 @@ from werkzeug.security import generate_password_hash
 import os
 
 with app.app_context():
+
+    db.session.execute(db.text("DROP TABLE IF EXISTS class_schedules, schedule, course_assignments, enrollments, courses, departments, users CASCADE;"))
+    db.session.commit()
+
     db.create_all()
 
     ADMIN_EMAIL    = os.environ.get('ADMIN_EMAIL')

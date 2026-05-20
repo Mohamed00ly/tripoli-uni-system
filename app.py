@@ -272,6 +272,12 @@ def enrollment():
     if current_user.financial_status == 'unpaid':
         return render_template('student/enrollment_locked.html')
 
+    # Guard: student must be assigned to a department before they can enroll
+    if not current_user.department_id:
+        flash('لم يتم تعيين قسم أكاديمي لحسابك بعد. '
+              'يرجى التواصل مع مسجّل الكلية لتحديث بياناتك.', 'warning')
+        return render_template('student/enrollment.html', courses_data=[])
+
     all_current = Enrollment.query.filter_by(
         user_id=current_user.id, semester='1', year=2024).all()
     enrolled_this     = {e.course_id for e in all_current if not e.dropped_by_admin}
@@ -281,8 +287,14 @@ def enrollment():
         e.course_id for e in Enrollment.query.filter_by(user_id=current_user.id).all()
         if e.grade is not None and e.grade >= 50 and not e.dropped_by_admin
     }
+
+    # Strict department filter — only courses belonging to the student's own department
+    dept_courses = Course.query.filter_by(
+        department_id=current_user.department_id
+    ).order_by(Course.code).all()
+
     courses_data = []
-    for course in Course.query.all():
+    for course in dept_courses:
         can = True; reason = ''
         if course.prerequisite_id and course.prerequisite_id not in passed_ids:
             can = False
@@ -1612,8 +1624,7 @@ import os
 
 with app.app_context():
 
-    db.session.execute(db.text("DROP TABLE IF EXISTS class_schedules, schedule, course_assignments, enrollments, courses, departments, users CASCADE;"))
-    db.session.commit()
+    # DROP TABLE lines removed — db.create_all() below handles schema safely.
 
     db.create_all()
 

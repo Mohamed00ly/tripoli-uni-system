@@ -825,6 +825,35 @@ def pre_register():
     return render_template('admin/pre_register.html', students=students, departments=departments)
 
 
+@app.route('/admin/preregistered/<int:pre_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_pre_registered(pre_id):
+    student = PreRegisteredStudent.query.get_or_404(pre_id)
+    name = student.full_name
+    sid  = student.student_id
+
+    # Delete documents linked to this pre-registration record only
+    Document.query.filter_by(pre_reg_id=pre_id).delete()
+
+    log_action('حذف من التسجيل المسبق', 'pre_registered', pre_id,
+               old_val=f'{sid}:{name}')
+    db.session.delete(student)
+    db.session.commit()
+
+    # Inform admin if an active user account already exists for this student_id
+    existing_user = User.query.filter_by(student_id=sid).first()
+    if existing_user:
+        flash(
+            f'تم حذف "{name}" من قائمة التسجيل المسبق. '
+            f'تنبيه: لديه حساب نشط في النظام لم يتأثر بالحذف.',
+            'warning'
+        )
+    else:
+        flash(f'تم حذف "{name}" من قائمة التسجيل المسبق بنجاح.', 'success')
+    return redirect(url_for('pre_register'))
+
+
 # ── Admin — Import / Export / Analytics / Audit ───────────────────────────────
 
 @app.route('/admin/import', methods=['GET', 'POST'])

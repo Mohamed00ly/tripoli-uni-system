@@ -109,7 +109,19 @@
             </div>
             {% endif %}
           </div>
-          <span class="text-gray-600 text-xs flex-shrink-0">{{ s.created_at.strftime('%Y-%m-%d') }}</span>
+          <div class="flex flex-col items-end gap-2 flex-shrink-0">
+            <span class="text-gray-600 text-xs">{{ s.created_at.strftime('%Y-%m-%d') }}</span>
+            <form method="POST"
+                  action="{{ url_for('delete_pre_registered', pre_id=s.id) }}"
+                  onsubmit="return confirm('هل أنت متأكد من حذف الطالب &quot;{{ s.full_name }}&quot; نهائياً من قائمة التسجيل المسبق؟\n\nهذا الإجراء لا يمكن التراجع عنه.')">
+              <button type="submit"
+                class="text-xs px-3 py-1 rounded-lg bg-red-900/30 hover:bg-red-900/60
+                       text-red-400 hover:text-red-300 border border-red-900/50
+                       hover:border-red-700 transition font-medium">
+                <i class="fa-solid fa-trash-can ml-1"></i>حذف
+              </button>
+            </form>
+          </div>
         </div>
         {% else %}
         <div class="px-6 py-12 text-center text-gray-500 text-sm">لا يوجد طلاب مسجلون مسبقاً</div>

@@ -261,6 +261,24 @@ def dashboard():
     return render_template('student/dashboard.html', enrollments=enrollments)
 
 
+def _is_first_semester(user_id):
+    """True when the student has no graded enrollment records (never completed a semester)."""
+    return not Enrollment.query.filter(
+        Enrollment.user_id == user_id,
+        Enrollment.grade.isnot(None)
+    ).first()
+
+
+def _active_enrollment_count(user_id, semester, year):
+    """Count of non-admin-dropped enrollments for the given semester/year."""
+    return Enrollment.query.filter(
+        Enrollment.user_id == user_id,
+        Enrollment.semester == semester,
+        Enrollment.year == year,
+        Enrollment.dropped_by_admin == False  # noqa: E712
+    ).count()
+
+
 @app.route('/enrollment')
 @login_required
 def enrollment():
@@ -276,16 +294,25 @@ def enrollment():
     if not current_user.department_id:
         flash('لم يتم تعيين قسم أكاديمي لحسابك بعد. '
               'يرجى التواصل مع مسجّل الكلية لتحديث بياناتك.', 'warning')
-        return render_template('student/enrollment.html', courses_data=[])
+        return render_template('student/enrollment.html', courses_data=[],
+                               is_first_sem=True, current_count=0)
+
+    is_first_sem  = _is_first_semester(current_user.id)
+    current_count = _active_enrollment_count(current_user.id, '1', 2024)
 
     all_current = Enrollment.query.filter_by(
         user_id=current_user.id, semester='1', year=2024).all()
     enrolled_this     = {e.course_id for e in all_current if not e.dropped_by_admin}
     admin_dropped_ids = {e.course_id for e in all_current if e.dropped_by_admin}
 
+    all_enrollments = Enrollment.query.filter_by(user_id=current_user.id).all()
     passed_ids = {
-        e.course_id for e in Enrollment.query.filter_by(user_id=current_user.id).all()
+        e.course_id for e in all_enrollments
         if e.grade is not None and e.grade >= 50 and not e.dropped_by_admin
+    }
+    failed_ids = {
+        e.course_id for e in all_enrollments
+        if e.grade is not None and e.grade < 50 and not e.dropped_by_admin
     }
 
     # Strict department filter — only courses belonging to the student's own department
@@ -296,16 +323,34 @@ def enrollment():
     courses_data = []
     for course in dept_courses:
         can = True; reason = ''
-        if course.prerequisite_id and course.prerequisite_id not in passed_ids:
-            can = False
-            prereq = Course.query.get(course.prerequisite_id)
-            reason = f'يتطلب اجتياز: {prereq.name_ar}' if prereq else 'متطلب سابق'
+        is_failed = course.id in failed_ids
+
+        if is_first_sem:
+            # First-semester students: no prerequisite checks; enforce 6-course cap
+            if current_count >= 6 and course.id not in enrolled_this:
+                can = False
+                reason = 'تجاوزت الحد الأقصى للفصل الأول (6 مواد)'
+        else:
+            # Second+ semester: enforce prerequisites (retaking a failed course is exempt)
+            if course.prerequisite_id and not is_failed \
+                    and course.prerequisite_id not in passed_ids:
+                can = False
+                prereq = Course.query.get(course.prerequisite_id)
+                reason = f'يتطلب اجتياز: {prereq.name_ar}' if prereq else 'متطلب سابق'
+
         courses_data.append({
-            'course': course, 'can_enroll': can, 'reason': reason,
-            'is_enrolled': course.id in enrolled_this,
+            'course':          course,
+            'can_enroll':      can,
+            'reason':          reason,
+            'is_enrolled':     course.id in enrolled_this,
             'is_admin_dropped': course.id in admin_dropped_ids,
+            'is_failed':       is_failed,
         })
-    return render_template('student/enrollment.html', courses_data=courses_data)
+
+    return render_template('student/enrollment.html',
+                           courses_data=courses_data,
+                           is_first_sem=is_first_sem,
+                           current_count=current_count)
 
 
 @app.route('/enroll/<int:course_id>', methods=['POST'])
@@ -316,15 +361,36 @@ def enroll_course(course_id):
     if current_user.financial_status == 'unpaid':
         flash('الرسوم الجامعية غير مدفوعة', 'error')
         return redirect(url_for('enrollment'))
-    course = Course.query.get_or_404(course_id)
-    if course.prerequisite_id:
-        passed = Enrollment.query.filter(
-            Enrollment.user_id == current_user.id,
-            Enrollment.course_id == course.prerequisite_id,
-            Enrollment.grade >= 50).first()
-        if not passed:
-            flash('لم تجتز المتطلب السابق', 'error')
+
+    course       = Course.query.get_or_404(course_id)
+    is_first_sem = _is_first_semester(current_user.id)
+
+    # Check if student has a prior failed attempt (retake grace exemption)
+    past_failed = Enrollment.query.filter(
+        Enrollment.user_id  == current_user.id,
+        Enrollment.course_id == course_id,
+        Enrollment.grade.isnot(None),
+        Enrollment.grade     < 50
+    ).first()
+
+    if is_first_sem:
+        # First-semester cap: max 6 courses, no prerequisite checks
+        current_count = _active_enrollment_count(current_user.id, '1', 2024)
+        if current_count >= 6:
+            flash('تجاوزت الحد الأقصى للمواد في الفصل الأول (6 مواد)', 'error')
             return redirect(url_for('enrollment'))
+    else:
+        # Second+ semester: enforce prerequisites unless retaking a failed course
+        if course.prerequisite_id and not past_failed:
+            passed = Enrollment.query.filter(
+                Enrollment.user_id  == current_user.id,
+                Enrollment.course_id == course.prerequisite_id,
+                Enrollment.grade    >= 50
+            ).first()
+            if not passed:
+                flash('لم تجتز المتطلب السابق', 'error')
+                return redirect(url_for('enrollment'))
+
     existing = Enrollment.query.filter_by(
         user_id=current_user.id, course_id=course_id, semester='1', year=2024).first()
     if existing:
@@ -337,6 +403,7 @@ def enroll_course(course_id):
         else:
             flash('مسجل في هذه المادة مسبقاً', 'warning')
         return redirect(url_for('enrollment'))
+
     db.session.add(Enrollment(
         user_id=current_user.id, course_id=course_id, semester='1', year=2024))
     log_action('تسجيل مادة', 'enrollment', course_id, new_val=course.code)
@@ -1758,6 +1825,69 @@ with app.app_context():
                 ))
     db.session.commit()
     print('✓ Seed: 7 departments / 70 courses verified.')
+
+    # ═══════════════════════════════════════════════════════════════
+    #  SEED ADVANCED — 7 Departments × 5 Advanced Courses (111–115)
+    #  Prerequisites link back to introductory 101/102 courses.
+    #  Department is derived automatically from the prereq's dept.
+    # ═══════════════════════════════════════════════════════════════
+    SEED_ADVANCED = [
+        # Law
+        ('LAW111', 'قانون العقود المقارن',                    'Comparative Contract Law',              3, 'LAW101'),
+        ('LAW112', 'قانون الإجراءات المدنية',                 'Civil Procedure Law',                   3, 'LAW101'),
+        ('LAW113', 'الأنظمة القانونية المقارنة',              'Comparative Legal Systems',             3, 'LAW102'),
+        ('LAW114', 'قانون التجارة والشركات',                  'Commercial and Corporate Law',          3, 'LAW102'),
+        ('LAW115', 'قانون حقوق الإنسان الدولي',               'International Human Rights Law',        3, 'LAW101'),
+        # Interior Design
+        ('INT111', 'تصميم المساكن الخاصة',                   'Residential Interior Design',           3, 'INT101'),
+        ('INT112', 'تصميم الفضاءات التجارية',                 'Commercial Space Design',               3, 'INT101'),
+        ('INT113', 'مشروع التصميم الداخلي 1',                 'Interior Design Project 1',             4, 'INT102'),
+        ('INT114', 'برامج التصميم المتقدمة',                  'Advanced Design Software',              3, 'INT102'),
+        ('INT115', 'التصميم المستدام والبيئي',                 'Sustainable and Environmental Design',  3, 'INT101'),
+        # Engineering
+        ('ENG111', 'التحليل الإنشائي الأساسي',                'Structural Analysis',                   3, 'ENG101'),
+        ('ENG112', 'الهندسة الكهربائية الأساسية',              'Basic Electrical Engineering',          3, 'ENG101'),
+        ('ENG113', 'هندسة البيئة والتلوث',                    'Environmental Engineering',             3, 'ENG102'),
+        ('ENG114', 'المواد الهندسية المتقدمة',                 'Advanced Engineering Materials',        3, 'ENG102'),
+        ('ENG115', 'ترموديناميكا هندسية',                     'Engineering Thermodynamics',            3, 'ENG101'),
+        # Accounting
+        ('ACC111', 'مراجعة الحسابات والتدقيق 1',              'Auditing and Assurance 1',              3, 'ACC101'),
+        ('ACC112', 'مراجعة الحسابات والتدقيق 2',              'Auditing and Assurance 2',              3, 'ACC102'),
+        ('ACC113', 'المحاسبة المتوسطة',                       'Intermediate Accounting',               3, 'ACC102'),
+        ('ACC114', 'محاسبة القطاع المصرفي',                   'Banking Sector Accounting',             3, 'ACC101'),
+        ('ACC115', 'تحليل القوائم المالية',                    'Financial Statement Analysis',          3, 'ACC101'),
+        # Business Administration
+        ('BUS111', 'إدارة سلسلة الإمداد والتوريد',            'Supply Chain Management',               3, 'BUS101'),
+        ('BUS112', 'إدارة الجودة الشاملة TQM',                'Total Quality Management',              3, 'BUS101'),
+        ('BUS113', 'الأعمال الدولية والعولمة',                 'International Business and Globalization', 3, 'BUS102'),
+        ('BUS114', 'إدارة العلاقة مع العملاء CRM',             'Customer Relationship Management',      3, 'BUS102'),
+        ('BUS115', 'قيادة الفرق وإدارة التغيير',               'Team Leadership and Change Management', 3, 'BUS101'),
+        # Languages
+        ('LNG111', 'تحليل النصوص الأدبية المقارن',             'Comparative Literary Text Analysis',    3, 'LNG101'),
+        ('LNG112', 'الترجمة التخصصية التقنية والقانونية',      'Technical and Legal Translation',       3, 'LNG102'),
+        ('LNG113', 'مهارات الكتابة الاحترافية',                'Professional Writing Skills',           3, 'LNG102'),
+        ('LNG114', 'اللسانيات التطبيقية',                     'Applied Linguistics',                   3, 'LNG101'),
+        ('LNG115', 'لغة إضافية: مستوى أول',                   'Second Language Level 1',               3, 'LNG101'),
+        # Medicine
+        ('MED111', 'مقدمة في علم الميكروبيولوجيا الطبية',     'Introduction to Medical Microbiology',  4, 'MED101'),
+        ('MED112', 'علم الأدوية والصيدلة 1',                  'Pharmacology 1',                        3, 'MED101'),
+        ('MED113', 'علم الأمراض الجزيئي والوراثي',            'Molecular and Genetic Pathology',       4, 'MED102'),
+        ('MED114', 'مبادئ الفحص السريري',                     'Principles of Clinical Examination',    3, 'MED102'),
+        ('MED115', 'المهارات الطبية السريرية الأساسية',         'Basic Clinical Medical Skills',         3, 'MED101'),
+    ]
+
+    for code, name_ar, name_en, credits, prereq_code in SEED_ADVANCED:
+        if not Course.query.filter_by(code=code).first():
+            prereq = Course.query.filter_by(code=prereq_code).first()
+            if prereq:
+                db.session.add(Course(
+                    code=code, name_ar=name_ar, name_en=name_en,
+                    credits=credits,
+                    department_id=prereq.department_id,
+                    prerequisite_id=prereq.id,
+                ))
+    db.session.commit()
+    print('✓ Seed: 35 advanced courses (111–115 per dept) verified.')
 
     # ── Personal pre-reg entry (from Render env) ──────────────────
     if MY_STUDENT_ID and not PreRegisteredStudent.query.filter_by(student_id=MY_STUDENT_ID).first():

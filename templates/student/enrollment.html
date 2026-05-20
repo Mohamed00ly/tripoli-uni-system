@@ -2,16 +2,57 @@
 {% block title %}تسجيل المواد — بوابة جامعة طرابلس{% endblock %}
 
 {% block content %}
-<div class="mb-8">
+<div class="mb-6">
   <h1 class="text-3xl font-bold text-white">تسجيل المواد</h1>
   <p class="text-gray-400 mt-1 text-sm">الفصل الأول — السنة الجامعية 2024</p>
 </div>
+
+<!-- Semester type banner -->
+{% if is_first_sem %}
+<div class="mb-6 bg-blue-900/20 border border-blue-700/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+  <div class="flex items-center gap-3">
+    <div class="w-10 h-10 bg-blue-900/50 rounded-xl flex items-center justify-center flex-shrink-0">
+      <i class="fa-solid fa-star text-blue-400"></i>
+    </div>
+    <div>
+      <p class="text-blue-200 font-bold text-sm">طالب فصل أول — قبول جديد</p>
+      <p class="text-blue-400 text-xs mt-0.5">المتطلبات السابقة غير مطلوبة · الحد الأقصى 6 مواد</p>
+    </div>
+  </div>
+  <!-- Cap progress -->
+  <div class="min-w-[160px]">
+    <div class="flex items-center justify-between text-xs text-blue-300 mb-1">
+      <span>المواد المسجلة</span>
+      <span class="font-bold">{{ current_count }} / 6</span>
+    </div>
+    <div class="w-full bg-blue-900/40 rounded-full h-2">
+      <div class="h-2 rounded-full transition-all
+        {% if current_count >= 6 %}bg-red-500{% elif current_count >= 4 %}bg-yellow-400{% else %}bg-blue-500{% endif %}"
+        style="width: {{ [current_count / 6 * 100, 100] | min | int }}%"></div>
+    </div>
+    {% if current_count >= 6 %}
+    <p class="text-red-400 text-xs mt-1 font-medium">تم بلوغ الحد الأقصى</p>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<div class="mb-6 bg-indigo-900/20 border border-indigo-700/50 rounded-2xl p-4 flex items-center gap-3">
+  <div class="w-10 h-10 bg-indigo-900/50 rounded-xl flex items-center justify-center flex-shrink-0">
+    <i class="fa-solid fa-graduation-cap text-indigo-400"></i>
+  </div>
+  <div>
+    <p class="text-indigo-200 font-bold text-sm">طالب فصل ثاني أو أعلى</p>
+    <p class="text-indigo-400 text-xs mt-0.5">المتطلبات السابقة مفعّلة · يُسمح بإعادة تسجيل المواد الراسبة</p>
+  </div>
+</div>
+{% endif %}
 
 <!-- Legend -->
 <div class="flex flex-wrap items-center gap-5 mb-6 text-xs text-gray-400">
   <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span>متاح للتسجيل</span>
   <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-green-500 inline-block"></span>مسجل بالفعل</span>
   <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span>أُسقطت بواسطة الإدارة</span>
+  <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>إعادة (راسب)</span>
   <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-gray-600 inline-block"></span>محجوب (متطلب سابق)</span>
 </div>
 
@@ -21,23 +62,31 @@
   <div class="bg-gray-900 rounded-2xl border overflow-hidden transition-all
     {% if item.is_enrolled %}border-green-700
     {% elif item.is_admin_dropped %}border-orange-800/60
+    {% elif item.is_failed and not item.is_enrolled %}border-red-800/60
     {% elif not item.can_enroll %}border-gray-800 opacity-55
     {% else %}border-gray-800 hover:border-gray-700{% endif %}">
 
     <div class="p-5">
       <div class="flex items-start justify-between mb-3">
         <div class="flex-1 min-w-0">
-          <span class="text-xs text-gray-500 font-mono">{{ c.code }}</span>
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-gray-500 font-mono">{{ c.code }}</span>
+            {% if item.is_failed and not item.is_enrolled %}
+            <span class="text-[10px] bg-red-900/50 text-red-400 px-1.5 py-0.5 rounded font-medium">إعادة</span>
+            {% endif %}
+          </div>
           <h3 class="text-white font-bold mt-0.5 leading-snug">{{ c.name_ar }}</h3>
           <p class="text-gray-500 text-xs mt-0.5">{{ c.name_en }}</p>
         </div>
         <span class="mr-3 flex-shrink-0 text-xs px-2 py-1 rounded-lg
           {% if item.is_enrolled %}bg-green-900/50 text-green-400
           {% elif item.is_admin_dropped %}bg-orange-900/50 text-orange-400
+          {% elif item.is_failed and not item.is_enrolled %}bg-red-900/50 text-red-400
           {% elif not item.can_enroll %}bg-gray-800 text-gray-500
           {% else %}bg-blue-900/50 text-blue-400{% endif %}">
           {% if item.is_enrolled %}مسجل
           {% elif item.is_admin_dropped %}أُسقط
+          {% elif item.is_failed and not item.is_enrolled %}راسب
           {% elif not item.can_enroll %}محجوب
           {% else %}متاح{% endif %}
         </span>
@@ -48,7 +97,11 @@
         <span>{{ c.department.name_ar }}</span>
       </div>
 
-      {% if not item.can_enroll and item.reason %}
+      {% if item.is_failed and not item.is_enrolled and item.can_enroll %}
+      <div class="bg-red-900/20 border border-red-800/50 rounded-lg p-2.5 mb-4 text-xs text-red-300">
+        <i class="fa-solid fa-rotate-right ml-1"></i>يمكنك إعادة تسجيل هذه المادة
+      </div>
+      {% elif not item.can_enroll and item.reason %}
       <div class="bg-gray-800/60 rounded-lg p-3 mb-4 text-xs text-yellow-400">
         &#9888; {{ item.reason }}
       </div>
@@ -88,8 +141,11 @@
       {% elif item.can_enroll %}
       <form method="POST" action="{{ url_for('enroll_course', course_id=c.id) }}">
         <button type="submit"
-          class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-sm transition">
-          تسجيل المادة
+          class="w-full py-2 rounded-xl text-sm transition font-medium
+            {% if item.is_failed %}bg-red-700 hover:bg-red-600 text-white
+            {% else %}bg-blue-600 hover:bg-blue-700 text-white{% endif %}">
+          {% if item.is_failed %}<i class="fa-solid fa-rotate-right ml-1"></i>إعادة التسجيل
+          {% else %}تسجيل المادة{% endif %}
         </button>
       </form>
       {% else %}

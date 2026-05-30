@@ -387,6 +387,11 @@ def enroll_course(course_id):
         ).all()
     }
 
+    # Block: cannot re-enroll in an already-passed course
+    if course_id in passed_set:
+        flash('تم اجتياز هذه المادة مسبقاً — لا يمكن التسجيل فيها مجدداً', 'error')
+        return redirect(url_for('enrollment'))
+
     # Graduation-project capstone lock: all other dept courses must be passed
     if 'مشروع التخرج' in course.name_ar:
         other = Course.query.filter(
@@ -452,12 +457,19 @@ def enroll_course(course_id):
 @app.route('/unenroll/<int:course_id>', methods=['POST'])
 @login_required
 def unenroll_course(course_id):
-    if current_user.financial_status == 'paid':
-        flash('عذراً، لا يمكن إسقاط المادة بعد إتمام عملية دفع التكاليف.', 'error')
-        return redirect(url_for('enrollment'))
     rec = Enrollment.query.filter_by(
         user_id=current_user.id, course_id=course_id, semester='1', year=2024
     ).first_or_404()
+    # Hard blocks — order matters: grade lock beats payment lock
+    if rec.grade is not None and rec.grade >= 50:
+        flash('لا يمكن إلغاء تسجيل مادة تم اجتيازها', 'error')
+        return redirect(url_for('enrollment'))
+    if rec.grade is not None:
+        flash('لا يمكن إلغاء تسجيل مادة صدرت فيها درجة', 'error')
+        return redirect(url_for('enrollment'))
+    if current_user.financial_status == 'paid':
+        flash('عذراً، لا يمكن إسقاط المادة بعد إتمام عملية دفع التكاليف.', 'error')
+        return redirect(url_for('enrollment'))
     log_action('إلغاء تسجيل', 'enrollment', course_id)
     db.session.delete(rec)
     db.session.commit()
@@ -503,6 +515,8 @@ def lecturer_grades(course_id):
     fw_weight = formula.final_weight     if formula else 60
 
     if request.method == 'POST':
+        passed_count = failed_count = 0
+
         for e in Enrollment.query.filter_by(course_id=course_id, semester='1', year=2024).all():
             old_cw    = e.classwork_grade
             old_final = e.final_grade
@@ -524,14 +538,29 @@ def lecturer_grades(course_id):
                     log_action(action, 'enrollment', e.id,
                                f'أعمال:{old_cw} امتحان:{old_final}',
                                f'أعمال:{e.classwork_grade} امتحان:{e.final_grade}')
-                    e.grade  = new_total
-                    if new_total is not None:
-                        e.status = 'completed' if new_total >= 50 else 'enrolled'
+                    e.grade = new_total
+
+                # ── Post-grade state sync ──────────────────────────────
+                if new_total is not None:
+                    if new_total >= 50:
+                        # Passed: lock the grade and mark status
+                        e.status      = 'completed'
+                        e.grade_locked = True
+                        passed_count  += 1
+                    else:
+                        # Failed: keep grade editable, re-enable retake eligibility
+                        e.status      = 'enrolled'
+                        e.grade_locked = False
+                        failed_count  += 1
             except ValueError:
                 flash(f'قيمة غير صحيحة: {e.student.full_name}', 'error')
 
         db.session.commit()
-        flash(f'تم حفظ درجات {course.name_ar}', 'success')
+        parts = []
+        if passed_count: parts.append(f'{passed_count} ناجح')
+        if failed_count: parts.append(f'{failed_count} راسب')
+        summary = ' — ' + ' · '.join(parts) if parts else ''
+        flash(f'تم حفظ درجات {course.name_ar}{summary}', 'success')
         return redirect(url_for('lecturer_grades', course_id=course_id))
 
     enrollments = Enrollment.query.filter_by(
@@ -608,9 +637,14 @@ def edit_student(user_id):
                 new_total = compute_grade(e)
                 if new_total != old_grade:
                     log_action('تعديل درجة (مدير)', 'enrollment', e.id, old_grade, new_total)
-                    e.grade  = new_total
-                    if new_total is not None:
-                        e.status = 'completed' if new_total >= 50 else 'enrolled'
+                    e.grade = new_total
+                if new_total is not None:
+                    if new_total >= 50:
+                        e.status       = 'completed'
+                        e.grade_locked = True
+                    else:
+                        e.status       = 'enrolled'
+                        e.grade_locked = False
             except ValueError:
                 pass
 

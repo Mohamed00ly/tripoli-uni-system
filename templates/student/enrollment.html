@@ -61,14 +61,14 @@
   {% for item in courses_data %}
   {% set c = item.course %}
 
-  {# ── Determine border colour ── #}
-  {% if item.is_passed and not item.is_enrolled %}
-    {% set border_cls = 'border-green-800/60 opacity-75' %}
+  {# ── Determine border colour — is_passed always wins ── #}
+  {% if item.is_passed %}
+    {% set border_cls = 'border-green-800/60 opacity-80' %}
   {% elif item.is_enrolled %}
     {% set border_cls = 'border-teal-700' %}
   {% elif item.is_admin_dropped %}
     {% set border_cls = 'border-orange-800/60' %}
-  {% elif item.is_failed and not item.is_enrolled %}
+  {% elif item.is_failed %}
     {% set border_cls = 'border-red-800/60' %}
   {% elif not item.can_enroll %}
     {% set border_cls = 'border-gray-800 opacity-50' %}
@@ -99,18 +99,18 @@
           <p class="text-gray-500 text-xs mt-0.5">{{ c.name_en }}</p>
         </div>
 
-        <!-- Status badge -->
+        <!-- Status badge — is_passed always wins -->
         <span class="mr-3 flex-shrink-0 text-xs px-2 py-1 rounded-lg
-          {% if item.is_passed and not item.is_enrolled %}bg-green-900/50 text-green-400
+          {% if item.is_passed %}bg-green-900/50 text-green-400
           {% elif item.is_enrolled %}bg-teal-900/50 text-teal-300
           {% elif item.is_admin_dropped %}bg-orange-900/50 text-orange-400
-          {% elif item.is_failed and not item.is_enrolled %}bg-red-900/50 text-red-400
+          {% elif item.is_failed %}bg-red-900/50 text-red-400
           {% elif not item.can_enroll %}bg-gray-800 text-gray-500
           {% else %}bg-blue-900/50 text-blue-400{% endif %}">
-          {% if item.is_passed and not item.is_enrolled %}اجتزت
+          {% if item.is_passed %}اجتزت
           {% elif item.is_enrolled %}مسجل
           {% elif item.is_admin_dropped %}أُسقط
-          {% elif item.is_failed and not item.is_enrolled %}راسب
+          {% elif item.is_failed %}راسب
           {% elif not item.can_enroll %}مغلق
           {% else %}متاح{% endif %}
         </span>
@@ -123,15 +123,15 @@
 
       <!-- ── State-specific notice blocks ── -->
 
-      {# Passed: locked badge #}
-      {% if item.is_passed and not item.is_enrolled %}
+      {# Passed: permanently locked — is_passed beats everything #}
+      {% if item.is_passed %}
       <div class="w-full bg-green-900/20 border border-green-800/50 rounded-xl py-3 px-4
                   flex items-center justify-center gap-2 text-green-400 text-sm font-medium">
         <i class="fa-solid fa-circle-check"></i>
         تم اجتياز هذا المقرر
       </div>
 
-      {# Currently enrolled — with or without grade #}
+      {# Currently enrolled (no grade yet) #}
       {% elif item.is_enrolled %}
         {% if current_user.financial_status == 'paid' %}
         <div class="w-full bg-gray-800/60 border border-gray-700 text-gray-500 py-2 rounded-xl

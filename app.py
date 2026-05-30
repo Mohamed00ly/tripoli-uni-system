@@ -315,36 +315,50 @@ def enrollment():
         if e.grade is not None and e.grade < 50 and not e.dropped_by_admin
     }
 
-    # Strict department filter — only courses belonging to the student's own department
-    dept_courses = Course.query.filter_by(
+    # Fetch all dept courses ordered by code (needed for graduation-project check)
+    all_dept_courses = Course.query.filter_by(
         department_id=current_user.department_id
     ).order_by(Course.code).all()
+
+    # First-semester: only the first 6 fundamental courses are visible
+    dept_courses = all_dept_courses[:6] if is_first_sem else all_dept_courses
 
     courses_data = []
     for course in dept_courses:
         can = True; reason = ''
-        is_failed = course.id in failed_ids
+        is_failed  = course.id in failed_ids
+        is_passed  = course.id in passed_ids
+        is_grad    = 'مشروع التخرج' in course.name_ar
 
-        if is_first_sem:
-            # First-semester students: no prerequisite checks; enforce 6-course cap
+        if is_grad:
+            # Capstone lock: every other dept course must be passed
+            other = [c for c in all_dept_courses if c.id != course.id]
+            if not all(c.id in passed_ids for c in other):
+                can = False
+                reason = 'مشروع التخرج مغلق — يجب اجتياز جميع المواد الأخرى في القسم أولاً'
+        elif is_first_sem:
+            # First-semester cap: 6 courses max, no prereq checks
             if current_count >= 6 and course.id not in enrolled_this:
                 can = False
                 reason = 'تجاوزت الحد الأقصى للفصل الأول (6 مواد)'
         else:
-            # Second+ semester: enforce prerequisites (retaking a failed course is exempt)
+            # Second+ semester: enforce prerequisites (retake courses are exempt)
             if course.prerequisite_id and not is_failed \
                     and course.prerequisite_id not in passed_ids:
                 can = False
                 prereq = Course.query.get(course.prerequisite_id)
-                reason = f'يتطلب اجتياز: {prereq.name_ar}' if prereq else 'متطلب سابق'
+                reason = ('مقرر مغلق — التسجيل يتطلب اجتياز: ' + prereq.name_ar) \
+                         if prereq else 'مقرر مغلق — متطلب سابق غير مكتمل'
 
         courses_data.append({
-            'course':          course,
-            'can_enroll':      can,
-            'reason':          reason,
-            'is_enrolled':     course.id in enrolled_this,
+            'course':           course,
+            'can_enroll':       can,
+            'reason':           reason,
+            'is_enrolled':      course.id in enrolled_this,
             'is_admin_dropped': course.id in admin_dropped_ids,
-            'is_failed':       is_failed,
+            'is_failed':        is_failed,
+            'is_passed':        is_passed,
+            'is_grad':          is_grad,
         })
 
     return render_template('student/enrollment.html',
@@ -365,7 +379,25 @@ def enroll_course(course_id):
     course       = Course.query.get_or_404(course_id)
     is_first_sem = _is_first_semester(current_user.id)
 
-    # Check if student has a prior failed attempt (retake grace exemption)
+    passed_set = {
+        e.course_id for e in Enrollment.query.filter(
+            Enrollment.user_id == current_user.id,
+            Enrollment.grade.isnot(None),
+            Enrollment.grade >= 50
+        ).all()
+    }
+
+    # Graduation-project capstone lock: all other dept courses must be passed
+    if 'مشروع التخرج' in course.name_ar:
+        other = Course.query.filter(
+            Course.department_id == course.department_id,
+            Course.id != course_id
+        ).all()
+        if not all(c.id in passed_set for c in other):
+            flash('مشروع التخرج مغلق — يجب اجتياز جميع المواد الأخرى في القسم أولاً', 'error')
+            return redirect(url_for('enrollment'))
+
+    # Prior failed attempt → retake grace (skip prereq check)
     past_failed = Enrollment.query.filter(
         Enrollment.user_id  == current_user.id,
         Enrollment.course_id == course_id,
@@ -374,7 +406,15 @@ def enroll_course(course_id):
     ).first()
 
     if is_first_sem:
-        # First-semester cap: max 6 courses, no prerequisite checks
+        # First-semester: only the first 6 courses of the dept are allowed
+        allowed_ids = {
+            c.id for c in Course.query.filter_by(
+                department_id=course.department_id
+            ).order_by(Course.code).limit(6).all()
+        }
+        if course_id not in allowed_ids:
+            flash('طلاب الفصل الأول يمكنهم التسجيل في أول 6 مواد تأسيسية فقط', 'error')
+            return redirect(url_for('enrollment'))
         current_count = _active_enrollment_count(current_user.id, '1', 2024)
         if current_count >= 6:
             flash('تجاوزت الحد الأقصى للمواد في الفصل الأول (6 مواد)', 'error')
@@ -382,13 +422,10 @@ def enroll_course(course_id):
     else:
         # Second+ semester: enforce prerequisites unless retaking a failed course
         if course.prerequisite_id and not past_failed:
-            passed = Enrollment.query.filter(
-                Enrollment.user_id  == current_user.id,
-                Enrollment.course_id == course.prerequisite_id,
-                Enrollment.grade    >= 50
-            ).first()
-            if not passed:
-                flash('لم تجتز المتطلب السابق', 'error')
+            if course.prerequisite_id not in passed_set:
+                prereq = Course.query.get(course.prerequisite_id)
+                name   = prereq.name_ar if prereq else 'المتطلب السابق'
+                flash(f'مقرر مغلق — التسجيل يتطلب اجتياز: {name}', 'error')
                 return redirect(url_for('enrollment'))
 
     existing = Enrollment.query.filter_by(

@@ -16,7 +16,7 @@
     </div>
     <div>
       <p class="text-blue-200 font-bold text-sm">طالب فصل أول — قبول جديد</p>
-      <p class="text-blue-400 text-xs mt-0.5">المتطلبات السابقة غير مطلوبة · الحد الأقصى 6 مواد</p>
+      <p class="text-blue-400 text-xs mt-0.5">تسجيل المواد التأسيسية الستة فقط · لا تُطبَّق المتطلبات السابقة</p>
     </div>
   </div>
   <!-- Cap progress -->
@@ -50,23 +50,38 @@
 <!-- Legend -->
 <div class="flex flex-wrap items-center gap-5 mb-6 text-xs text-gray-400">
   <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-blue-500 inline-block"></span>متاح للتسجيل</span>
-  <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-green-500 inline-block"></span>مسجل بالفعل</span>
+  <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-green-600 inline-block"></span>تم الاجتياز</span>
+  <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block"></span>مسجل حالياً</span>
   <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span>أُسقطت بواسطة الإدارة</span>
-  <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>إعادة (راسب)</span>
-  <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-gray-600 inline-block"></span>محجوب (متطلب سابق)</span>
+  <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>راسب — إعادة</span>
+  <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-gray-600 inline-block"></span>مغلق</span>
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
   {% for item in courses_data %}
   {% set c = item.course %}
-  <div class="bg-gray-900 rounded-2xl border overflow-hidden transition-all
-    {% if item.is_enrolled %}border-green-700
-    {% elif item.is_admin_dropped %}border-orange-800/60
-    {% elif item.is_failed and not item.is_enrolled %}border-red-800/60
-    {% elif not item.can_enroll %}border-gray-800 opacity-55
-    {% else %}border-gray-800 hover:border-gray-700{% endif %}">
 
+  {# ── Determine border colour ── #}
+  {% if item.is_passed and not item.is_enrolled %}
+    {% set border_cls = 'border-green-800/60 opacity-75' %}
+  {% elif item.is_enrolled %}
+    {% set border_cls = 'border-teal-700' %}
+  {% elif item.is_admin_dropped %}
+    {% set border_cls = 'border-orange-800/60' %}
+  {% elif item.is_failed and not item.is_enrolled %}
+    {% set border_cls = 'border-red-800/60' %}
+  {% elif not item.can_enroll %}
+    {% set border_cls = 'border-gray-800 opacity-50' %}
+  {% elif item.is_grad %}
+    {% set border_cls = 'border-purple-800/60' %}
+  {% else %}
+    {% set border_cls = 'border-gray-800 hover:border-gray-600' %}
+  {% endif %}
+
+  <div class="bg-gray-900 rounded-2xl border overflow-hidden transition-all {{ border_cls }}">
     <div class="p-5">
+
+      <!-- Header row -->
       <div class="flex items-start justify-between mb-3">
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
@@ -74,56 +89,70 @@
             {% if item.is_failed and not item.is_enrolled %}
             <span class="text-[10px] bg-red-900/50 text-red-400 px-1.5 py-0.5 rounded font-medium">إعادة</span>
             {% endif %}
+            {% if item.is_grad %}
+            <span class="text-[10px] bg-purple-900/50 text-purple-300 px-1.5 py-0.5 rounded font-medium">
+              <i class="fa-solid fa-award"></i> تخرج
+            </span>
+            {% endif %}
           </div>
           <h3 class="text-white font-bold mt-0.5 leading-snug">{{ c.name_ar }}</h3>
           <p class="text-gray-500 text-xs mt-0.5">{{ c.name_en }}</p>
         </div>
+
+        <!-- Status badge -->
         <span class="mr-3 flex-shrink-0 text-xs px-2 py-1 rounded-lg
-          {% if item.is_enrolled %}bg-green-900/50 text-green-400
+          {% if item.is_passed and not item.is_enrolled %}bg-green-900/50 text-green-400
+          {% elif item.is_enrolled %}bg-teal-900/50 text-teal-300
           {% elif item.is_admin_dropped %}bg-orange-900/50 text-orange-400
           {% elif item.is_failed and not item.is_enrolled %}bg-red-900/50 text-red-400
           {% elif not item.can_enroll %}bg-gray-800 text-gray-500
           {% else %}bg-blue-900/50 text-blue-400{% endif %}">
-          {% if item.is_enrolled %}مسجل
+          {% if item.is_passed and not item.is_enrolled %}اجتزت
+          {% elif item.is_enrolled %}مسجل
           {% elif item.is_admin_dropped %}أُسقط
           {% elif item.is_failed and not item.is_enrolled %}راسب
-          {% elif not item.can_enroll %}محجوب
+          {% elif not item.can_enroll %}مغلق
           {% else %}متاح{% endif %}
         </span>
       </div>
 
+      <!-- Info row (no credits) -->
       <div class="flex gap-4 text-xs text-gray-500 mb-4">
-        <span>{{ c.credits }} ساعات</span>
         <span>{{ c.department.name_ar }}</span>
       </div>
 
-      {% if item.is_failed and not item.is_enrolled and item.can_enroll %}
-      <div class="bg-red-900/20 border border-red-800/50 rounded-lg p-2.5 mb-4 text-xs text-red-300">
-        <i class="fa-solid fa-rotate-right ml-1"></i>يمكنك إعادة تسجيل هذه المادة
-      </div>
-      {% elif not item.can_enroll and item.reason %}
-      <div class="bg-gray-800/60 rounded-lg p-3 mb-4 text-xs text-yellow-400">
-        &#9888; {{ item.reason }}
-      </div>
-      {% endif %}
+      <!-- ── State-specific notice blocks ── -->
 
-      {% if item.is_enrolled %}
+      {# Passed: locked badge #}
+      {% if item.is_passed and not item.is_enrolled %}
+      <div class="w-full bg-green-900/20 border border-green-800/50 rounded-xl py-3 px-4
+                  flex items-center justify-center gap-2 text-green-400 text-sm font-medium">
+        <i class="fa-solid fa-circle-check"></i>
+        تم اجتياز هذا المقرر
+      </div>
+
+      {# Currently enrolled — with or without grade #}
+      {% elif item.is_enrolled %}
         {% if current_user.financial_status == 'paid' %}
-        <div class="w-full bg-gray-800/60 border border-gray-700 text-gray-500 py-2 rounded-xl text-sm text-center flex items-center justify-center gap-2 cursor-not-allowed select-none"
-             title="لا يمكن إسقاط المادة بعد الدفع">
-          <span>&#128274;</span> مدفوع — لا يمكن الإسقاط
+        <div class="w-full bg-gray-800/60 border border-gray-700 text-gray-500 py-2 rounded-xl
+                    text-sm text-center flex items-center justify-center gap-2 cursor-not-allowed select-none">
+          <i class="fa-solid fa-lock"></i> مسجل — لا يمكن الإسقاط بعد الدفع
         </div>
         {% else %}
         <form method="POST" action="{{ url_for('unenroll_course', course_id=c.id) }}">
           <button type="submit"
-            class="w-full bg-red-900/40 hover:bg-red-900/70 border border-red-800 text-red-400 hover:text-red-300 py-2 rounded-xl text-sm transition">
+            class="w-full bg-red-900/40 hover:bg-red-900/70 border border-red-800
+                   text-red-400 hover:text-red-300 py-2 rounded-xl text-sm transition">
             إلغاء التسجيل
           </button>
         </form>
         {% endif %}
+
+      {# Admin-dropped #}
       {% elif item.is_admin_dropped %}
-      <div class="w-full bg-orange-900/20 border border-orange-800/50 text-orange-400 py-2 rounded-xl text-xs text-center flex items-center justify-center gap-2 mb-2">
-        &#9888; أُسقطت بواسطة الإدارة
+      <div class="w-full bg-orange-900/20 border border-orange-800/50 text-orange-400 py-2
+                  rounded-xl text-xs text-center flex items-center justify-center gap-2 mb-2">
+        <i class="fa-solid fa-triangle-exclamation"></i> أُسقطت بواسطة الإدارة
       </div>
       {% if item.can_enroll %}
       <form method="POST" action="{{ url_for('enroll_course', course_id=c.id) }}">
@@ -133,28 +162,73 @@
         </button>
       </form>
       {% else %}
-      <button disabled
-        class="w-full bg-gray-800 text-gray-600 py-2 rounded-xl text-sm cursor-not-allowed">
+      <button disabled class="w-full bg-gray-800 text-gray-600 py-2 rounded-xl text-sm cursor-not-allowed">
         غير متاح
       </button>
       {% endif %}
-      {% elif item.can_enroll %}
+
+      {# Failed — retake available #}
+      {% elif item.is_failed %}
+        {% if item.can_enroll %}
+        <div class="bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2 mb-3 text-xs text-red-300 flex items-center gap-2">
+          <i class="fa-solid fa-triangle-exclamation flex-shrink-0"></i>
+          تنبيه: مادة راسب فيها سابقاً
+        </div>
+        <form method="POST" action="{{ url_for('enroll_course', course_id=c.id) }}">
+          <button type="submit"
+            class="w-full bg-red-700 hover:bg-red-600 text-white py-2 rounded-xl text-sm transition font-medium">
+            <i class="fa-solid fa-rotate-right ml-1"></i>إعادة التسجيل
+          </button>
+        </form>
+        {% else %}
+        <div class="bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2 mb-3 text-xs text-red-300 flex items-center gap-2">
+          <i class="fa-solid fa-triangle-exclamation flex-shrink-0"></i>
+          تنبيه: مادة راسب فيها سابقاً
+        </div>
+        <button disabled class="w-full bg-gray-800 text-gray-600 py-2 rounded-xl text-sm cursor-not-allowed">
+          غير متاح
+        </button>
+        {% endif %}
+
+      {# Locked — prerequisite or cap #}
+      {% elif not item.can_enroll %}
+      <div class="bg-gray-800/70 border border-gray-700 rounded-lg px-3 py-2.5 mb-3">
+        <div class="flex items-start gap-2 text-xs text-yellow-400">
+          <i class="fa-solid fa-lock mt-0.5 flex-shrink-0"></i>
+          <span>{{ item.reason }}</span>
+        </div>
+      </div>
+      <button disabled class="w-full bg-gray-800 text-gray-600 py-2 rounded-xl text-sm cursor-not-allowed">
+        <i class="fa-solid fa-lock ml-1"></i>التسجيل مغلق
+      </button>
+
+      {# Available — graduation project special button #}
+      {% elif item.is_grad %}
       <form method="POST" action="{{ url_for('enroll_course', course_id=c.id) }}">
         <button type="submit"
-          class="w-full py-2 rounded-xl text-sm transition font-medium
-            {% if item.is_failed %}bg-red-700 hover:bg-red-600 text-white
-            {% else %}bg-blue-600 hover:bg-blue-700 text-white{% endif %}">
-          {% if item.is_failed %}<i class="fa-solid fa-rotate-right ml-1"></i>إعادة التسجيل
-          {% else %}تسجيل المادة{% endif %}
+          class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-xl text-sm transition font-medium">
+          <i class="fa-solid fa-award ml-1"></i>تسجيل مشروع التخرج
         </button>
       </form>
+
+      {# Available — normal enroll #}
       {% else %}
-      <button disabled
-        class="w-full bg-gray-800 text-gray-600 py-2 rounded-xl text-sm cursor-not-allowed">
-        غير متاح
-      </button>
+      <form method="POST" action="{{ url_for('enroll_course', course_id=c.id) }}">
+        <button type="submit"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-sm transition font-medium">
+          تسجيل المادة
+        </button>
+      </form>
       {% endif %}
+
     </div>
+  </div>
+  {% else %}
+  <!-- Empty state -->
+  <div class="col-span-full bg-gray-900 rounded-2xl border border-gray-800 p-16 text-center">
+    <i class="fa-solid fa-book-open text-4xl text-gray-700 mb-4 block"></i>
+    <p class="text-gray-400">لا توجد مواد متاحة</p>
+    <p class="text-gray-600 text-sm mt-1">تواصل مع مسجّل الكلية لمزيد من المعلومات</p>
   </div>
   {% endfor %}
 </div>

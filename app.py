@@ -1126,28 +1126,39 @@ def admin_transcript(user_id):
 def assign_lecturer():
     if request.method == 'POST':
         lecturer_id = request.form.get('lecturer_id', type=int)
-        course_id   = request.form.get('course_id', type=int)
-        if lecturer_id and course_id:
+        course_ids  = [int(x) for x in request.form.getlist('course_ids') if x.isdigit()]
+        if not lecturer_id:
+            flash('يرجى اختيار محاضر', 'error')
+            return redirect(url_for('assign_lecturer'))
+        if not course_ids:
+            flash('يرجى اختيار مادة واحدة على الأقل', 'error')
+            return redirect(url_for('assign_lecturer'))
+        added = 0
+        for cid in course_ids:
             exists = CourseAssignment.query.filter_by(
-                lecturer_id=lecturer_id, course_id=course_id,
+                lecturer_id=lecturer_id, course_id=cid,
                 semester='1', year=2024).first()
             if not exists:
                 db.session.add(CourseAssignment(
-                    lecturer_id=lecturer_id, course_id=course_id,
+                    lecturer_id=lecturer_id, course_id=cid,
                     semester='1', year=2024))
                 log_action('تعيين محاضر', 'course_assignment',
-                           course_id, new_val=f'lecturer={lecturer_id}')
-                db.session.commit()
-                flash('تم التعيين بنجاح', 'success')
-            else:
-                flash('المحاضر معين لهذه المادة مسبقاً', 'warning')
+                           cid, new_val=f'lecturer={lecturer_id}')
+                added += 1
+        if added:
+            db.session.commit()
+            flash(f'تم التعيين بنجاح ({added} {"مادة" if added == 1 else "مواد"})', 'success')
+        else:
+            flash('جميع المواد المحددة مُعيَّنة مسبقاً لهذا المحاضر', 'warning')
         return redirect(url_for('assign_lecturer'))
 
     lecturers   = User.query.filter_by(role='lecturer').all()
-    courses     = Course.query.all()
+    courses     = Course.query.order_by(Course.department_id, Course.code).all()
+    departments = Department.query.order_by(Department.name_ar).all()
     assignments = CourseAssignment.query.filter_by(semester='1', year=2024).all()
     return render_template('admin/assign_lecturer.html',
-        lecturers=lecturers, courses=courses, assignments=assignments)
+        lecturers=lecturers, courses=courses,
+        departments=departments, assignments=assignments)
 
 
 # ── Admin — Staff Management (Full-Access only) ───────────────────────────────
@@ -1888,6 +1899,52 @@ with app.app_context():
                 ))
     db.session.commit()
     print('✓ Seed: 35 advanced courses (111–115 per dept) verified.')
+
+    # ═══════════════════════════════════════════════════════════════
+    #  SEED — Information Technology Department (15 courses)
+    #  Two-pass: insert all first, then wire prerequisites.
+    # ═══════════════════════════════════════════════════════════════
+    it_dept = Department.query.filter_by(name_en='Information Technology').first()
+    if not it_dept:
+        it_dept = Department(name_ar='تقنية معلومات', name_en='Information Technology')
+        db.session.add(it_dept)
+        db.session.flush()
+
+    IT_COURSES = [
+        # (code, name_ar, name_en, credits, prereq_code_or_None)
+        ('IT101', 'المدخل إلى تقنية المعلومات',          'Introduction to IT',                3, None),
+        ('IT102', 'أساسيات البرمجة',                      'Principles of Programming',          3, None),
+        ('IT103', 'تراكيب البيانات والخوارزميات',          'Data Structures and Algorithms',     3, 'IT102'),
+        ('IT104', 'هندسة البرمجيات',                      'Software Engineering',               3, 'IT103'),
+        ('IT105', 'أساسيات شبكات الحاسوب',               'Fundamentals of Computer Networks',  3, None),
+        ('IT106', 'نظام إدارة قواعد البيانات',             'Database Management Systems',        3, 'IT101'),
+        ('IT107', 'برمجة وتطوير الويب',                   'Web Programming and Development',    3, 'IT102'),
+        ('IT108', 'نظم التشغيل',                          'Operating Systems',                  3, 'IT101'),
+        ('IT109', 'أمن الشبكات والمعلومات',               'Information and Network Security',   3, 'IT105'),
+        ('IT110', 'تحليل وتصميم النظم',                   'Systems Analysis and Design',        3, 'IT104'),
+        ('IT111', 'الحوسبة السحابية',                     'Cloud Computing',                    3, 'IT105'),
+        ('IT112', 'ذكاء الأعمال وتنظيم البيانات',          'Business Intelligence',              3, 'IT106'),
+        ('IT113', 'إدارة مشاريع تقنية المعلومات',          'IT Project Management',              3, 'IT110'),
+        ('IT114', 'برمجة تطبيقات الهاتف المحمول',          'Mobile Application Development',     3, 'IT107'),
+        ('IT115', 'مشروع التخرج',                         'IT Graduation Project',              4, None),
+    ]
+
+    # Pass 1 — insert courses without prerequisites
+    for code, name_ar, name_en, credits, _ in IT_COURSES:
+        if not Course.query.filter_by(code=code).first():
+            db.session.add(Course(code=code, name_ar=name_ar, name_en=name_en,
+                                  credits=credits, department_id=it_dept.id))
+    db.session.flush()
+
+    # Pass 2 — wire prerequisites now that all IDs exist
+    for code, _, _, _, prereq_code in IT_COURSES:
+        if prereq_code:
+            c = Course.query.filter_by(code=code).first()
+            p = Course.query.filter_by(code=prereq_code).first()
+            if c and p and not c.prerequisite_id:
+                c.prerequisite_id = p.id
+    db.session.commit()
+    print('✓ Seed: IT department / 15 courses verified.')
 
     # ── Personal pre-reg entry (from Render env) ──────────────────
     if MY_STUDENT_ID and not PreRegisteredStudent.query.filter_by(student_id=MY_STUDENT_ID).first():

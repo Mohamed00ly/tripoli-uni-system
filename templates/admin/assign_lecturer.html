@@ -3,74 +3,262 @@
 
 {% block content %}
 <div class="mb-8">
-  <h1 class="text-3xl font-bold text-white">تعيين المحاضرين</h1>
+  <a href="{{ url_for('admin_dashboard') }}" class="text-gray-500 hover:text-gray-300 text-sm transition">← لوحة الإدارة</a>
+  <h1 class="text-3xl font-bold text-white mt-2">تعيين المحاضرين</h1>
   <p class="text-gray-400 mt-1 text-sm">ربط المحاضرين بمواد الفصل الدراسي الأول 2024</p>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-  <!-- Assignment form -->
+  <!-- ── Assignment form ── -->
   <div>
-    <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6">
-      <h2 class="text-base font-bold text-white mb-5">تعيين جديد</h2>
-      <form method="POST" class="space-y-4">
+    <div class="bg-gray-900 rounded-2xl border border-teal-800/40 p-6 sticky top-20">
+
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 bg-teal-900/50 rounded-xl flex items-center justify-center text-teal-400">
+          <i class="fa-solid fa-user-check text-lg"></i>
+        </div>
         <div>
-          <label class="block text-gray-300 text-sm mb-2">المحاضر</label>
-          <select name="lecturer_id" required
-            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition">
+          <h2 class="text-base font-bold text-white">تعيين جديد</h2>
+          <p class="text-gray-500 text-xs mt-0.5">3 خطوات — يمكن تعيين عدة مواد دفعةً واحدة</p>
+        </div>
+      </div>
+
+      <form method="POST" id="assign-form" class="space-y-5">
+
+        <!-- Step 1: Lecturer -->
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <span class="w-5 h-5 rounded-full bg-teal-900 text-teal-400 text-[11px] flex items-center justify-center font-bold flex-shrink-0">١</span>
+            <label class="text-gray-300 text-sm font-medium">المحاضر</label>
+          </div>
+          <select name="lecturer_id" id="lecturer-select" required
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm
+                   focus:outline-none focus:border-teal-500 transition">
             <option value="">— اختر محاضراً —</option>
             {% for l in lecturers %}
             <option value="{{ l.id }}">{{ l.full_name }}</option>
             {% endfor %}
           </select>
           {% if not lecturers %}
-          <p class="text-yellow-400 text-xs mt-1">لا يوجد محاضرون. قم بترقية طالب من صفحة الطلاب.</p>
+          <p class="text-yellow-500 text-xs mt-1.5 flex items-center gap-1">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            لا يوجد محاضرون. قم بترقية مستخدم من صفحة الطلاب.
+          </p>
           {% endif %}
         </div>
+
+        <!-- Step 2: Department filter -->
         <div>
-          <label class="block text-gray-300 text-sm mb-2">المادة</label>
-          <select name="course_id" required
-            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition">
-            <option value="">— اختر مادة —</option>
-            {% for c in courses %}
-            <option value="{{ c.id }}">{{ c.code }} — {{ c.name_ar }}</option>
+          <div class="flex items-center gap-2 mb-2">
+            <span class="w-5 h-5 rounded-full bg-teal-900 text-teal-400 text-[11px] flex items-center justify-center font-bold flex-shrink-0">٢</span>
+            <label class="text-gray-300 text-sm font-medium">القسم</label>
+          </div>
+          <select id="dept-select"
+            class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm
+                   focus:outline-none focus:border-teal-500 transition">
+            <option value="">— اختر قسماً —</option>
+            {% for d in departments %}
+            <option value="{{ d.id }}">{{ d.name_ar }}</option>
             {% endfor %}
           </select>
         </div>
+
+        <!-- Step 3: Course checkboxes -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded-full bg-teal-900 text-teal-400 text-[11px] flex items-center justify-center font-bold flex-shrink-0">٣</span>
+              <label class="text-gray-300 text-sm font-medium">المواد</label>
+            </div>
+            <div class="flex items-center gap-3">
+              <span id="selected-count"
+                class="text-teal-400 text-xs font-bold hidden"></span>
+              <button type="button" id="toggle-all-btn" onclick="toggleAll()"
+                class="text-xs text-gray-500 hover:text-teal-400 transition hidden underline underline-offset-2">
+                تحديد الكل
+              </button>
+            </div>
+          </div>
+
+          <!-- Scrollable checkbox container -->
+          <div id="course-container"
+            class="bg-gray-800/50 border border-gray-700 rounded-xl overflow-y-auto"
+            style="max-height: 272px;">
+
+            <!-- Default: no department chosen -->
+            <div id="no-dept-msg" class="px-4 py-10 text-center">
+              <i class="fa-solid fa-building-columns text-3xl text-gray-600 mb-3 block"></i>
+              <p class="text-gray-500 text-xs">اختر قسماً في الخطوة ٢ لعرض مواده</p>
+            </div>
+
+            <!-- Chosen dept but zero courses -->
+            <div id="no-courses-msg" class="px-4 py-10 text-center hidden">
+              <i class="fa-solid fa-book-open text-3xl text-gray-600 mb-3 block"></i>
+              <p class="text-gray-500 text-xs">لا توجد مواد في هذا القسم</p>
+            </div>
+
+            <!-- Course rows (all rendered, filtered by JS) -->
+            {% for c in courses %}
+            <label class="course-item flex items-center gap-3 px-4 py-3
+                          hover:bg-gray-700/50 cursor-pointer transition hidden border-b border-gray-700/40 last:border-0"
+                   data-dept="{{ c.department_id }}">
+              <input type="checkbox" name="course_ids" value="{{ c.id }}"
+                class="w-4 h-4 rounded border-gray-500 bg-gray-700 text-teal-500
+                       focus:ring-teal-500 focus:ring-offset-0 course-checkbox cursor-pointer flex-shrink-0"
+                onchange="updateCount()">
+              <div class="min-w-0 flex-1">
+                <span class="font-mono text-teal-400 text-[11px] bg-teal-900/30 px-1.5 py-0.5 rounded">{{ c.code }}</span>
+                <span class="text-gray-200 text-xs mr-1.5">{{ c.name_ar }}</span>
+              </div>
+              <span class="text-gray-600 text-[10px] flex-shrink-0">{{ c.credits }}س</span>
+            </label>
+            {% endfor %}
+
+          </div>
+
+          <!-- Visible count -->
+          <p id="course-stats" class="text-gray-600 text-xs mt-1.5 hidden">
+            <span id="visible-count">0</span> مادة متاحة
+          </p>
+        </div>
+
         <button type="submit"
-          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-xl transition">
-          تعيين المحاضر
+          class="w-full bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-bold py-3 rounded-xl transition text-sm">
+          <i class="fa-solid fa-link ml-1.5"></i>
+          <span id="submit-label">تعيين المحاضر</span>
         </button>
+
       </form>
     </div>
   </div>
 
-  <!-- Assignments list -->
+  <!-- ── Assignments list ── -->
   <div class="lg:col-span-2">
     <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-800">
-        <h2 class="text-base font-bold text-white">التعيينات الحالية ({{ assignments | length }})</h2>
+      <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+        <h2 class="text-base font-bold text-white">التعيينات الحالية</h2>
+        <span class="text-gray-500 text-xs bg-gray-800 px-2.5 py-1 rounded-full">{{ assignments | length }} تعيين</span>
       </div>
+
       {% if assignments %}
-      <div class="divide-y divide-gray-800">
-        {% for a in assignments %}
-        <div class="px-6 py-4 flex items-center justify-between gap-4">
-          <div>
-            <p class="text-white font-medium text-sm">{{ a.course.name_ar }}</p>
-            <p class="text-gray-500 text-xs font-mono mt-0.5">{{ a.course.code }}</p>
-          </div>
-          <div class="text-center">
-            <span class="text-yellow-400 text-xs font-medium">{{ a.lecturer.full_name }}</span>
-          </div>
-          <span class="text-gray-600 text-xs">F{{ a.semester }}/{{ a.year }}</span>
-        </div>
-        {% endfor %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-800 text-gray-500 text-xs">
+              <th class="text-right px-5 py-3">المادة</th>
+              <th class="text-right px-4 py-3">القسم</th>
+              <th class="text-right px-4 py-3">المحاضر</th>
+              <th class="text-center px-4 py-3">الفصل</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-800">
+            {% for a in assignments %}
+            <tr class="hover:bg-gray-800/30 transition">
+              <td class="px-5 py-3">
+                <p class="text-white font-medium text-xs">{{ a.course.name_ar }}</p>
+                <p class="text-gray-600 text-[10px] font-mono mt-0.5">{{ a.course.code }}</p>
+              </td>
+              <td class="px-4 py-3 text-gray-400 text-xs">
+                {{ a.course.department.name_ar if a.course.department else '—' }}
+              </td>
+              <td class="px-4 py-3">
+                <span class="text-teal-400 text-xs font-medium">{{ a.lecturer.full_name }}</span>
+              </td>
+              <td class="px-4 py-3 text-center text-gray-500 text-xs">
+                F{{ a.semester }}/{{ a.year }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
       {% else %}
-      <div class="px-6 py-12 text-center text-gray-600 text-sm">لا توجد تعيينات بعد</div>
+      <div class="px-6 py-16 text-center">
+        <i class="fa-solid fa-user-check text-4xl text-gray-700 mb-4 block"></i>
+        <p class="text-gray-500 text-sm">لا توجد تعيينات بعد</p>
+        <p class="text-gray-600 text-xs mt-1">استخدم النموذج على اليسار لتعيين محاضر لمادة</p>
+      </div>
       {% endif %}
     </div>
   </div>
 
 </div>
+
+<script>
+// ── Department → course filter ───────────────────────────────────────────────
+function filterCourses(deptId) {
+  const items    = document.querySelectorAll('.course-item');
+  const noDept   = document.getElementById('no-dept-msg');
+  const noMatch  = document.getElementById('no-courses-msg');
+  const stats    = document.getElementById('course-stats');
+  const toggleBtn = document.getElementById('toggle-all-btn');
+
+  let visible = 0;
+
+  items.forEach(item => {
+    const match = deptId && item.dataset.dept === String(deptId);
+    item.classList.toggle('hidden', !match);
+    if (!match) {
+      item.querySelector('.course-checkbox').checked = false;
+    } else {
+      visible++;
+    }
+  });
+
+  if (!deptId) {
+    noDept.classList.remove('hidden');
+    noMatch.classList.add('hidden');
+    stats.classList.add('hidden');
+    toggleBtn.classList.add('hidden');
+  } else if (visible === 0) {
+    noDept.classList.add('hidden');
+    noMatch.classList.remove('hidden');
+    stats.classList.add('hidden');
+    toggleBtn.classList.add('hidden');
+  } else {
+    noDept.classList.add('hidden');
+    noMatch.classList.add('hidden');
+    document.getElementById('visible-count').textContent = visible;
+    stats.classList.remove('hidden');
+    toggleBtn.classList.remove('hidden');
+    toggleBtn.textContent = 'تحديد الكل';
+  }
+
+  updateCount();
+}
+
+// ── Selected-count badge + submit button label ───────────────────────────────
+function updateCount() {
+  const checked = document.querySelectorAll('.course-checkbox:checked').length;
+  const badge   = document.getElementById('selected-count');
+  const label   = document.getElementById('submit-label');
+
+  if (checked > 0) {
+    badge.textContent = checked + ' محددة';
+    badge.classList.remove('hidden');
+    label.textContent = 'تعيين المحاضر (' + checked + ' مادة)';
+  } else {
+    badge.classList.add('hidden');
+    label.textContent = 'تعيين المحاضر';
+  }
+}
+
+// ── Toggle all visible checkboxes ────────────────────────────────────────────
+function toggleAll() {
+  const visible  = document.querySelectorAll('.course-item:not(.hidden) .course-checkbox');
+  const allOn    = [...visible].every(cb => cb.checked);
+  visible.forEach(cb => cb.checked = !allOn);
+  document.getElementById('toggle-all-btn').textContent = allOn ? 'تحديد الكل' : 'إلغاء التحديد';
+  updateCount();
+}
+
+// ── Wire events ──────────────────────────────────────────────────────────────
+document.getElementById('dept-select').addEventListener('change', function () {
+  filterCourses(this.value);
+});
+
+// Initialize state on page load
+filterCourses(document.getElementById('dept-select').value);
+</script>
 {% endblock %}
